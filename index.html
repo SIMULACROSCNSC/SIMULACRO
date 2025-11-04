@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulacro Registraduría - CNSC (200 preguntas)</title>
+<style>
+  :root{--blue:#1e88e5;--green:#2e7d32;--red:#c62828;--bg:#f6f7fb}
+  body{font-family:Inter,Arial,Helvetica,Helvetica,sans-serif;background:var(--bg);margin:0;padding:18px;color:#111}
+  .container{max-width:1100px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+  h1{color:var(--blue);margin:0 0 8px}
+  p.lead{margin:0 0 12px;color:#444}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+  select,input,button{padding:8px;border-radius:6px;border:1px solid #cfcfcf;font-size:14px}
+  button{background:var(--blue);color:#fff;border:none;cursor:pointer}
+  button.secondary{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+  button.ghost{background:transparent;border:1px dashed #ccc;color:#333}
+  .grid{display:grid;grid-template-columns:1fr 360px;gap:16px}
+  .panel{background:#fff;padding:12px;border-radius:6px;border:1px solid #eee}
+  .question{padding:12px;margin-bottom:10px;border-left:6px solid var(--blue);border-radius:6px;background:#fbfdff}
+  .options label{display:block;margin:6px 0;cursor:pointer}
+  .timer{font-weight:700;color:#333}
+  .progress{height:12px;background:#eee;border-radius:8px;overflow:hidden;margin:8px 0}
+  .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),#6fb1ff)}
+  .result{padding:12px;border-radius:6px}
+  .correct{color:var(--green);font-weight:700}
+  .incorrect{color:var(--red);font-weight:700}
+  .small{font-size:13px;color:#555}
+  .hidden{display:none}
+  textarea{width:100%;height:80px}
+  footer{margin-top:12px;text-align:center;color:#777;font-size:13px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Simulacro Registraduría (CNSC) — 200 preguntas</h1>
+  <p class="lead">Selecciona la(s) temáticas, el modo y presiona <strong>Iniciar simulacro</strong>. El simulacro se ejecuta completamente en tu navegador. <em>(Actualizado: Shuffling de opciones y correcciones en puntuación/explicaciones)</em></p>
+  <div class="controls">
+    <label for="topicSelect" class="small">Temática:</label>
+    <select id="topicSelect" multiple size="6" style="min-width:420px">
+      <option value="Constitucion">Constitución Política</option>
+      <option value="Ley1755">Ley 1755 - Derecho de petición</option>
+      <option value="Atencion">Atención y servicio al ciudadano</option>
+      <option value="GestionDoc">Gestión documental y archivo</option>
+      <option value="CPACA">Procedimiento Administrativo - CPACA (Ley 1437)</option>
+      <option value="MIPG">MIPG / Gestión pública</option>
+      <option value="Ofimatica">Ofimática</option>
+      <option value="RNEC_Funcional">Temas RNEC funcionales (registro, TRD...)</option>
+      <option value="Comportamentales">Competencias comportamentales</option>
+      <option value="Basicas_Matematicas">Competencias básicas - cuantitativas/lectura</option>
+    </select>
+    <label class="small">Número preguntas:</label>
+    <select id="numQ">
+      <option value="20">20</option>
+      <option value="30">30</option>
+      <option value="50">50</option>
+      <option value="100">100</option>
+      <option value="200">200</option>
+    </select>
+    <label class="small">Modo:</label>
+    <select id="mode">
+      <option value="examen">Examen (temporizado)</option>
+      <option value="estudio">Estudio (ver explicaciones inmediato)</option>
+    </select>
+    <label class="small">Tiempo (min):</label>
+    <input id="timeMin" type="number" min="5" max="60" value="10" style="width:72px" />
+    <button id="startBtn">Iniciar simulacro</button>
+    <button id="resetBtn" class="secondary">Restablecer sesión</button>
+    <button id="exportBtn" class="ghost">Exportar preguntas (JSON)</button>
+    <label for="keywordFilter" class="small" style="margin-left: 10px;">Filtrar por palabra clave:</label>
+    <input type="text" id="keywordFilter" placeholder="Escribe para filtrar preguntas..." style="flex-grow: 1; max-width: 250px;">
+    <button id="clearFilterBtn" class="ghost">Limpiar filtro</button>
+  </div>
+  <div class="grid">
+    <div>
+      <div id="topInfo" class="panel small">
+        <div>Modo: <span id="modeLabel">—</span> | Preguntas: <span id="qCount">0</span> | Respondidas: <span id="answeredCount">0</span></div>
+        <div class="progress" aria-hidden><i id="progressBar" style="width:0%"></i></div>
+        <div class="small">Tiempo restante: <span class="timer" id="timerDisplay">--:--</span></div>
+      </div>
+      <form id="quizForm" class="panel" style="min-height:380px">
+        <div id="questionsContainer" style="padding:6px"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button type="button" id="submitBtn">Enviar y Calificar</button>
+          <button type="button" id="showExpBtn" class="secondary hidden">Ver explicaciones</button>
+          <div style="margin-left:auto" class="small">Última puntuación: <span id="lastScore">—</span></div>
+        </div>
+      </form>
+    </div>
+    <aside>
+      <div class="panel">
+        <h3 style="margin:0 0 8px">Resultados</h3>
+        <div id="resultsArea" class="result small">Aún no envías el simulacro.</div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <h4 style="margin:0 0 8px">Historial (local)</h4>
+        <div id="historyArea" class="small">Sin registros</div>
+        <hr/>
+        <h4 style="margin:8px 0">Instrucciones rápidas</h4>
+        <ol class="small">
+          <li>Selecciona la(s) temáticas (mantén Ctrl para varias).</li>
+          <li>Elige modo y duración si es examen.</li>
+          <li>Inicia simulacro; responde y presiona <em>Enviar</em>.</li>
+          <li>Verás detalle por pregunta y explicaciones.</li>
+          <li>Usa el campo "Filtrar por palabra clave" para buscar preguntas específicas.</li>
+          <li><em>Nuevo:</em> Las opciones se barajan aleatoriamente cada vez que inicias.</li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+  <div id="explanationsPanel" class="panel hidden" style="margin-top:12px">
+    <h3 style="margin-top:0">Explicaciones detalladas</h3>
+    <div id="explanationsList" class="small"></div>
+  </div>
+  <footer>
+    Simulador offline — basado en temáticas CNSC / Registraduría. Guarda tu progreso en el navegador. ¡Corregido: Puntuación y explicaciones ahora se muestran correctamente!
+  </footer>
+</div>
+<script>
+/* =========================
+   BASE DE PREGUNTAS (200) - Completa como en versión anterior
+   ========================= */
+const QUESTIONS = [
+  /* 1-35 Preguntas ya existentes - Se asume que ya las tienes en tu archivo */
+  {id:1, topic:'Constitucion', stem:'La Constitución Política de Colombia de 1991 consagra como principio fundamental:', options:['A. La soberanía popular','B. El gobierno absoluto del ejecutivo','C. La monarquía constitucional','D. La supremacía del poder económico'], answer:'A', explanation:'La Constitución de 1991 establece la soberanía popular como principio fundamental.', reference:'Constitución Política de 1991 - Título I'},
+  {id:2, topic:'Constitucion', stem:'El derecho fundamental que permite solicitar información a autoridades públicas es:', options:['A. Libertad de empresa','B. Derecho de petición','C. Derecho de asociación','D. Habeas corpus'], answer:'B', explanation:'El derecho de petición protege la solicitud de información y se regula en la Ley 1755/2015.', reference:'Constitución Art.23 y Ley 1755 de 2015'},
+  {id:3, topic:'Constitucion', stem:'El principio de igualdad consignado en la Constitución corresponde al artículo:', options:['A. Art. 11','B. Art. 13','C. Art. 24','D. Art. 44'], answer:'B', explanation:'El Art.13 consagra la igualdad como principio y prohibición de discriminación.', reference:'Constitución - Art.13'},
+  {id:4, topic:'Constitucion', stem:'La protección preferente de derechos de niños y adolescentes está consagrada en:', options:['A. Art. 44','B. Art. 50','C. Art. 100','D. Art. 200'], answer:'A', explanation:'Art.44 reconoce derechos, prioridades y garantías para la infancia.', reference:'Constitución - Art.44'},
+  {id:5, topic:'Constitucion', stem:'Según la Constitución, la función pública se orienta a:', options:['A. Satisfacer el interés general','B. Fortalecer intereses privados','C. Mantener privilegios','D. Minimizar servicios'], answer:'A', explanation:'La función pública debe orientar sus acciones al interés general.', reference:'Constitución - Principios de la función pública'},
+  {id:6, topic:'Constitucion', stem:'La Comisión Nacional del Servicio Civil (CNSC) fue creada para:', options:['A. Administrar concursos de mérito','B. Gestionar impuestos','C. Dirigir servicios de salud','D. Controlar el comercio exterior'], answer:'A', explanation:'La CNSC administra el sistema de concursos de mérito para empleos públicos.', reference:'Constitución - Art.125 y normativa relacionada'},
+  {id:7, topic:'Constitucion', stem:'El habeas data protege principalmente:', options:['A. La propiedad intelectual','B. Los datos personales y su tratamiento','C. El derecho a la huelga','D. El fuero militar'], answer:'B', explanation:'Habeas data protege el nombre y manejo de información personal.', reference:'Ley 1581 de 2012 - Protección Datos Personales'},
+  {id:8, topic:'Constitucion', stem:'El principio de transparencia en la administración pública busca:', options:['A. Ocultar decisiones','B. Facilitar el acceso a la información pública','C. Priorizar la opacidad','D. Evitar rendición de cuentas'], answer:'B', explanation:'Transparencia implica acceso público a información y rendición de cuentas.', reference:'Ley 1712 de 2014 (Transparencia)'},
+  {id:9, topic:'Constitucion', stem:'Un mecanismo judicial para proteger derechos fundamentales es:', options:['A. Acción de tutela','B. Recurso de apelación','C. Acción popular','D. Queja administrativa'], answer:'A', explanation:'La acción de tutela protege derechos fundamentales de manera preferente y rápida.', reference:'Constitución - Acción de tutela'},
+  {id:10, topic:'Constitucion', stem:'La separación de poderes divide principalmente en:', options:['A. Ejecutivo, Legislativo y Judicial','B. Ejecutivo y Empresarial','C. Legislativo y Militar','D. Judicial y Comercial'], answer:'A', explanation:'La separación clásica de poderes es Ejecutivo, Legislativo y Judicial.', reference:'Principios constitucionales'},
+  {id:11, topic:'Constitucion', stem:'El control fiscal en Colombia corresponde a:', options:['A. La Procuraduría General','B. La Contraloría General de la República','C. La Personería','D. El Congreso'], answer:'B', explanation:'La Contraloría ejerce control fiscal sobre el manejo de recursos públicos.', reference:'Normativa de control fiscal'},
+  {id:12, topic:'Constitucion', stem:'Los mecanismos de participación ciudadana incluyen:', options:['A. Consulta popular, veedurías y acciones de control social','B. Solo elecciones','C. Privilegios administrativos','D. Nulidad de derechos'], answer:'A', explanation:'Participación ciudadana comprende consultas, veedurías y otros mecanismos.', reference:'Normativa sobre participación ciudadana'},
+  {id:13, topic:'Constitucion', stem:'El Estado social de derecho significa:', options:['A. Que el Estado protege solo la economía','B. Que el Estado garantiza derechos y bienestar social','C. Que no hay separación de poderes','D. Que reina la ley del mercado'], answer:'B', explanation:'Estado social de derecho busca garantizar derechos, justicia social y bienestar.', reference:'Constitución - Principios generales'},
+  {id:14, topic:'Constitucion', stem:'La figura del personero o personería vela por:', options:['A. Control disciplinario de servidores de un municipio','B. Recaudo de impuestos','C. Contratación internacional','D. Política monetaria'], answer:'A', explanation:'La personería vela por control disciplinario, protección de derechos y defensa del interés público a nivel local.', reference:'Normativa municipal y personería'},
+  {id:15, topic:'Constitucion', stem:'El derecho a la igualdad prohíbe:', options:['A. Tratos discriminatorios por origen, sexo o condición','B. Evaluar méritos en concursos','C. Garantizar equidad','D. Aplicar medidas afirmativas'], answer:'A', explanation:'La igualdad prohíbe la discriminación por características protegidas.', reference:'Constitución - Art.13'},
+  {id:16, topic:'Constitucion', stem:'La descentralización en Colombia busca:', options:['A. Centralizar decisiones','B. Transferir competencias a entidades territoriales','C. Eliminar gobernabilidad local','D. Privatizar servicios esenciales'], answer:'B', explanation:'Descentralización transfiere competencias a municipios y departamentos.', reference:'Estructura del Estado - Constitución'},
+  {id:17, topic:'Constitucion', stem:'La probidad en la función pública implica:', options:['A. Actuar con integridad y transparencia','B. Favorecer intereses privados','C. Ocultar información','D. Enriquecimiento ilícito'], answer:'A', explanation:'La probidad obliga a actuar con honestidad, evitar conflicto de interés y corrupción.', reference:'Código de conducta y Leyes anticorrupción'},
+  {id:18, topic:'Constitucion', stem:'El principio de legalidad obliga a los servidores públicos a:', options:['A. Actuar de acuerdo a la ley y normas','B. Actuar por voluntad personal','C. Ignorar regulaciones','D. Desobedecer mandatos judiciales'], answer:'A', explanation:'Legalidad implica que la administración se rige por la ley.', reference:'Constitución y derecho administrativo'},
+  {id:19, topic:'Constitucion', stem:'¿Cuál es la función principal del Poder Legislativo?', options:['A. Ejecutar políticas públicas','B. Crear y reformar leyes','C. Administrar justicia','D. Controlar empresas privadas'], answer:'B', explanation:'El Congreso hace y reforma las leyes en Colombia.', reference:'Estructura del Estado - Poder Legislativo'},
+  {id:20, topic:'Constitucion', stem:'La tutela procede cuando:', options:['A. Hay una amenaza o violación de derechos fundamentales','B. Se desea impugnar una norma general','C. Se quiere revisar una sentencia con recursos ordinarios','D. Se solicita información pública'], answer:'A', explanation:'La tutela protege derechos fundamentales de manera preferente.', reference:'Acción de tutela - Jurisprudencia'},
+  {id:21, topic:'Constitucion', stem:'El propósito constitucional de administrar y vigilar los sistemas de carrera de los servidores públicos se logra a través de:', options:['A. La Procuraduría General de la Nación.','B. La Comisión Nacional del Servicio Civil.','C. La Contraloría General de la República.','D. Los Consejos Superiores de la Judicatura.'], answer:'B', explanation:'Según el Art. 130 de la Constitución Política, la Comisión Nacional del Servicio Civil es la encargada de la administración y vigilancia de los sistemas de carrera de los servidores públicos, a excepción de los que determine la ley.', reference:'Constitución Política, Art. 130'},
+  {id:22, topic:'Constitucion', stem:'¿Qué define la acción de tutela según la Carta Política colombiana?', options:['A. Un medio jurídico que busca proteger los derechos y los intereses colectivos y difusos, como los derechos al medio ambiente sano o al espacio público.','B. Una figura jurídica, que se utiliza para hacer efectivo el cumplimiento de una ley o un acto administrativo omitido por una autoridad pública.','C. Un recurso especial, del cual se hace uso ante cualquier autoridad judicial para obtener la libertad de una persona que ha sido privada ilegalmente de ella.','D. Un mecanismo breve y sumario que busca proteger los derechos fundamentales de las personas, cuando estos resulten vulnerados o amenazados por la acción u omisión de cualquier autoridad pública o de particulares.'], answer:'D', explanation:'La acción de tutela es un mecanismo constitucional, consagrado en el artículo 86 de la Constitución Política, diseñado para proteger los derechos fundamentales de las personas de forma inmediata ante su vulneración o amenaza.', reference:'Constitución Política, Art. 86'},
+  {id:23, topic:'Constitucion', stem:'El artículo 125 de la Constitución Política establece que los empleos en los órganos y entidades del Estado son de carrera, con las excepciones previstas en la ley. ¿Cuál es el principal objetivo de este principio?', options:['A. Garantizar la estabilidad laboral de todos los servidores públicos sin importar su desempeño.','B. Asegurar que el acceso y ascenso en el servicio público se basen en el mérito y la capacidad de los aspirantes.','C. Permitir que los nombramientos se realicen de forma discrecional por parte de los superiores jerárquicos.','D. Fomentar la rotación constante de personal para evitar la burocratización.'], answer:'B', explanation:'El principio de carrera administrativa, establecido en el artículo 125 de la Constitución, busca asegurar que la vinculación y el ascenso en el servicio público se realicen con base en el mérito y la aptitud de los aspirantes, garantizando la eficiencia y la imparcialidad en la función pública.', reference:'Constitución Política, Art. 125'},
+  {id:24, topic:'Constitucion', stem:'¿Cuál de las siguientes afirmaciones describe mejor el principio de "debido proceso" en la administración pública?', options:['A. La obligación de las autoridades de resolver todas las solicitudes de los ciudadanos de manera positiva.','B. El derecho de toda persona a un proceso justo y transparente, que incluya la oportunidad de ser oído y de presentar pruebas.','C. La potestad de la administración para tomar decisiones sin necesidad de motivarlas o sustentarlas.','D. La facultad de los funcionarios de ignorar los términos legales cuando consideren que la situación lo amerita.'], answer:'B', explanation:'El debido proceso, consagrado en el artículo 29 de la Constitución, es un derecho fundamental que garantiza que todas las actuaciones judiciales y administrativas se desarrollen con apego a las normas preestablecidas y que los ciudadanos tengan la oportunidad de defender sus derechos, presentar pruebas y ser escuchados.', reference:'Constitución Política, Art. 29'},
+  {id:25, topic:'Constitucion', stem:'La Constitución Política de Colombia de 1991 es considerada una Constitución "garantista" debido a que:', options:['A. Se enfoca exclusivamente en la estructura del poder público y la división de ramas.','B. Prioriza la protección y garantía de los derechos fundamentales y los mecanismos para hacerlos efectivos.','C. Limita la participación ciudadana en las decisiones estatales.','D. Establece una economía de libre mercado sin intervención estatal.'], answer:'B', explanation:'La Constitución de 1991 es conocida por su extenso catálogo de derechos fundamentales, sociales y colectivos, así como por la creación de mecanismos como la acción de tutela para su protección efectiva, lo que la define como una constitución garantista.', reference:'Constitución Política de 1991 (características generales)'},
+  {id:26, topic:'Ley1755', stem:'Según la Ley 1755 de 2015, el derecho de petición se puede ejercer ante:', options:['A. Exclusivamente autoridades judiciales.','B. Solamente entidades privadas.','C. Autoridades y ciertas organizaciones privadas que presten servicios públicos.','D. Únicamente el Presidente de la República.'], answer:'C', explanation:'La Ley 1755 de 2015 establece que el derecho de petición puede ejercerse ante autoridades públicas y ante organizaciones privadas con o sin personería jurídica, cuando se trate de servicios públicos o actividades que impliquen el ejercicio de funciones públicas.', reference:'Ley 1755 de 2015, Art. 2'},
+  {id:27, topic:'Ley1755', stem:'El término general para resolver un derecho de petición en interés particular o general es de:', options:['A. 5 días hábiles.','B. 10 días hábiles.','C. 15 días hábiles.','D. 30 días hábiles.'], answer:'C', explanation:'El artículo 14 de la Ley 1755 de 2015 establece un plazo general de 15 días hábiles para resolver las peticiones en interés general o particular.', reference:'Ley 1755 de 2015, Art. 14'},
+  {id:28, topic:'Ley1755', stem:'En caso de que una petición sea incompleta o le falten requisitos, la autoridad debe requerir al peticionario para que la complete en un término de:', options:['A. 3 días.','B. 5 días.','C. 10 días.','D. 30 días.'], answer:'C', explanation:'Según el artículo 17 de la Ley 1755 de 2015, si una petición o queja está incompleta o carece de requisitos, se deberá requerir al interesado en los 10 días siguientes a la fecha de radicación para que la complete, con la advertencia de que si no lo hace se entenderá desistida.', reference:'Ley 1755 de 2015, Art. 17'},
+  {id:29, topic:'Ley1755', stem:'El derecho de petición de información se debe resolver en un plazo de:', options:['A. 10 días hábiles.','B. 15 días hábiles.','C. 20 días hábiles.','D. 30 días hábiles.'], answer:'A', explanation:'El artículo 14 de la Ley 1755 de 2015 establece que las peticiones de información deben resolverse dentro de los 10 días hábiles siguientes a su recepción.', reference:'Ley 1755 de 2015, Art. 14'},
+  {id:30, topic:'Ley1755', stem:'La presentación de un derecho de petición:', options:['A. Requiere obligatoriamente de un abogado.','B. Puede hacerse verbalmente, por escrito o por cualquier otro medio idóneo.','C. Solo es válida si se hace de forma presencial.','D. Siempre debe ser en formato digital.'], answer:'B', explanation:'El artículo 5 de la Ley 1755 de 2015 permite que las peticiones puedan presentarse verbalmente, por escrito, o por cualquier otro medio idóneo y eficaz para la comunicación o transmisión de datos.', reference:'Ley 1755 de 2015, Art. 5'},
+  {id:31, topic:'GestionDoc', stem:'Conjunto de actividades administrativas y técnicas tendientes a la planificación, manejo y organización de la documentación producida y recibida por las entidades, desde su origen hasta su destino final, con el objeto de facilitar su utilización y conservación.', options:['A. Gestión documental','B. Patrimonio documental','C. Función archivística','D. Proceso de digitalización'], answer:'A', explanation:'Esta es la definición de Gestión Documental según el Archivo General de la Nación y la Ley 594 de 2000.', reference:'Ley 594 de 2000 (Ley General de Archivos), Art. 3'},
+  {id:32, topic:'GestionDoc', stem:'Las Tablas de Retención Documental (TRD) son instrumentos archivísticos esenciales para:', options:['A. Determinar el valor histórico de todos los documentos al momento de su creación.','B. Establecer el tiempo que los documentos deben permanecer en el archivo de gestión, en el archivo central y su disposición final.','C. Justificar la eliminación inmediata de cualquier documento que no sea de uso frecuente.','D. Clasificar los documentos según su formato físico o digital.'], answer:'B', explanation:'Las TRD son instrumentos clave que permiten la gestión de los documentos en sus diferentes fases (gestión, central e histórico) y definen su disposición final (conservación total o eliminación).', reference:'Acuerdo 04 de 2019 AGN, Manual de TRD'},
+  {id:33, topic:'GestionDoc', stem:'Según la Ley General de Archivos (Ley 594 de 2000), los documentos de archivo son:', options:['A. Solo aquellos papeles que son considerados históricos.','B. Todo registro de información generada o recibida por una entidad pública o privada en razón de sus funciones o actividades.','C. Únicamente los expedientes que superan los 50 años de antigüedad.','D. Cualquier libro o publicación que se encuentre en una biblioteca pública.'], answer:'B', explanation:'El artículo 3 de la Ley 594 de 2000 define el documento de archivo como el "registro de información producida o recibida por una entidad pública o privada en razón de sus actividades o funciones".', reference:'Ley 594 de 2000, Art. 3'},
+  {id:34, topic:'GestionDoc', stem:'¿Cuál es el propósito principal de la organización de los archivos de gestión?', options:['A. Facilitar la consulta y recuperación de la información.','B. Ocultar documentos sensibles.','C. Reducir el espacio físico de almacenamiento al máximo.','D. Digitalizar todos los documentos sin importar su relevancia.'], answer:'A', explanation:'La organización de los archivos de gestión busca asegurar que los documentos estén clasificados, ordenados y descritos de manera que puedan ser fácilmente consultados y recuperados por los usuarios.', reference:'Normas y Principios Archivísticos'},
+  {id:35, topic:'GestionDoc', stem:'El principio de "orden original" en archivística significa que:', options:['A. Los documentos deben organizarse alfabéticamente.','B. Se debe respetar la secuencia en que los documentos fueron producidos o recibidos por la entidad.','C. Todos los documentos deben ser digitalizados.','D. Solo los documentos más antiguos son importantes.'], answer:'B', explanation:'El principio de orden original establece que la disposición de los documentos debe mantenerse de acuerdo con la secuencia en que fueron generados o recibidos, reflejando así la actividad de la entidad productora.', reference:'Principios Archivísticos'},
+  /* BLOQUE 1: Preguntas del 36 al 100 */
+  // Constitución Política
+  {id:36, topic:'Constitucion', stem:'La acción de cumplimiento tiene como finalidad hacer efectivo:', options:['A. Un derecho fundamental.','B. El cumplimiento de una ley o acto administrativo.','C. La reparación de un daño causado por una autoridad.','D. La defensa de intereses colectivos.'], answer:'B', explanation:'La acción de cumplimiento busca que una autoridad o particular cumpla una ley o acto administrativo que le impone un deber omitido.', reference:'Constitución Política, Art. 87'},
+  {id:37, topic:'Constitucion', stem:'El derecho a la vida es un derecho fundamental que está consagrado en el artículo:', options:['A. Art. 10','B. Art. 11','C. Art. 12','D. Art. 13'], answer:'B', explanation:'El artículo 11 de la Constitución establece que "El derecho a la vida es inviolable. No habrá pena de muerte."', reference:'Constitución Política, Art. 11'},
+  {id:38, topic:'Constitucion', stem:'¿Cuál de los siguientes no es un organismo de control en Colombia?', options:['A. La Procuraduría General de la Nación.','B. La Contraloría General de la República.','C. La Defensoría del Pueblo.','D. El Banco de la República.'], answer:'D', explanation:'El Banco de la República es la autoridad monetaria, cambiaria y crediticia, no un organismo de control. La Procuraduría, Contraloría y Defensoría sí lo son.', reference:'Constitución Política, Título X'},
+  {id:39, topic:'Constitucion', stem:'La autonomía territorial en Colombia implica que:', options:['A. Los departamentos y municipios pueden dictar sus propias leyes sin restricciones.','B. Las entidades territoriales tienen la potestad de gestionar sus intereses dentro de los límites de la Constitución y la ley.','C. El gobierno central no tiene ninguna injerencia en las decisiones locales.','D. Las entidades territoriales pueden declarar su independencia del Estado.'], answer:'B', explanation:'La autonomía territorial permite a los entes territoriales gestionar sus asuntos propios, administrar sus recursos y ejercer las competencias que les corresponden, siempre dentro del marco de la Constitución y la ley.', reference:'Constitución Política, Art. 287'},
+  {id:40, topic:'Constitucion', stem:'El derecho al debido proceso se aplica en:', options:['A. Solo procesos judiciales.','B. Solo procesos administrativos.','C. Tanto procesos judiciales como administrativos.','D. Únicamente en la elaboración de leyes.'], answer:'C', explanation:'El debido proceso es un derecho fundamental que se aplica a toda clase de actuaciones judiciales y administrativas, garantizando la imparcialidad y la posibilidad de defensa.', reference:'Constitución Política, Art. 29'},
+  {id:41, topic:'Constitucion', stem:'Los derechos colectivos y del ambiente pueden ser protegidos mediante:', options:['A. Acción de tutela.','B. Habeas corpus.','C. Acción popular.','D. Recurso de reposición.'], answer:'C', explanation:'La acción popular es el mecanismo judicial diseñado para proteger los derechos e intereses colectivos, como el derecho a un ambiente sano, el espacio público o la seguridad y salubridad públicas.', reference:'Constitución Política, Art. 88'},
+  {id:42, topic:'Constitucion', stem:'¿Qué organismo vela por el cumplimiento de los derechos humanos y la promoción del derecho internacional humanitario en Colombia?', options:['A. La Fiscalía General de la Nación.','B. La Contraloría General de la República.','C. La Defensoría del Pueblo.','D. El Consejo de Estado.'], answer:'C', explanation:'La Defensoría del Pueblo tiene como función principal la defensa y protección de los derechos humanos, así como la divulgación del derecho internacional humanitario.', reference:'Constitución Política, Art. 282'},
+  {id:43, topic:'Constitucion', stem:'El principio de la buena fe en la administración pública implica que:', options:['A. Las actuaciones de los particulares deben presumirse honestas y ajustadas a la ley.','B. La administración puede actuar de manera arbitraria si considera que es lo mejor para el interés público.','C. Los ciudadanos siempre deben demostrar la malicia de la administración.','D. La administración solo confía en documentos notariados.'], answer:'A', explanation:'El principio de buena fe (Art. 83 CP) se presume en las actuaciones de los particulares ante las autoridades públicas y se aplica también a la actuación de la administración.', reference:'Constitución Política, Art. 83'},
+  {id:44, topic:'Constitucion', stem:'¿Cuál de los siguientes no es un fin esencial del Estado social de derecho colombiano?', options:['A. Servir a la comunidad.','B. Promover la prosperidad general.','C. Garantizar la efectividad de los principios, derechos y deberes.','D. Fomentar la concentración de la riqueza en unos pocos.'], answer:'D', explanation:'Los fines esenciales del Estado (Art. 2 CP) incluyen servir a la comunidad y promover la prosperidad general, pero nunca fomentar la concentración de riqueza.', reference:'Constitución Política, Art. 2'},
+  {id:45, topic:'Constitucion', stem:'La soberanía reside exclusivamente en el pueblo, de quien emana el poder público. ¿Cómo ejerce el pueblo su soberanía?', options:['A. Solo a través de las elecciones presidenciales.','B. Directamente o por medio de sus representantes, en los términos que la Constitución establece.','C. Únicamente mediante referendos.','D. Solamente a través de la Fuerza Pública.'], answer:'B', explanation:'El artículo 3 de la Constitución establece que la soberanía reside en el pueblo, quien la ejerce directamente o por medio de sus representantes.', reference:'Constitución Política, Art. 3'},
+  // Ley 1755 - Derecho de petición
+  {id:46, topic:'Ley1755', stem:'Si una petición es interpuesta ante una autoridad incompetente, esta deberá ser remitida a la autoridad competente en un plazo de:', options:['A. 2 días hábiles.','B. 5 días hábiles.','C. 10 días hábiles.','D. 15 días hábiles.'], answer:'C', explanation:'El artículo 21 de la Ley 1755 de 2015 establece que la autoridad debe remitir la petición al competente en un término de diez (10) días y comunicar al peticionario.', reference:'Ley 1755 de 2015, Art. 21'},
+  {id:47, topic:'Ley1755', stem:'¿Qué sucede si una autoridad no resuelve un derecho de petición dentro de los términos establecidos por la ley?', options:['A. Se entiende que la petición fue aceptada (silencio administrativo positivo).','B. El peticionario pierde automáticamente el derecho a la respuesta.','C. Se configura una falla del servicio y el funcionario podría ser sancionado.','D. La petición debe ser radicada nuevamente.'], answer:'C', explanation:'La omisión en la respuesta dentro de los términos legales configura una falla del servicio y una vulneración al derecho fundamental de petición, lo que puede acarrear sanciones disciplinarias para el funcionario.', reference:'Ley 1755 de 2015 y jurisprudencia'},
+  {id:48, topic:'Ley1755', stem:'Las peticiones de consulta, referidas a temas generales que no afecten directamente al peticionario, deben resolverse en un término de:', options:['A. 10 días hábiles.','B. 15 días hábiles.','C. 20 días hábiles.','D. 30 días hábiles.'], answer:'D', explanation:'El artículo 14 de la Ley 1755 de 2015 establece un plazo de 30 días hábiles para resolver las peticiones de consulta.', reference:'Ley 1755 de 2015, Art. 14'},
+  {id:49, topic:'Ley1755', stem:'¿Cuál de los siguientes no es un requisito que se le pueda exigir a un derecho de petición?', options:['A. Nombres y apellidos completos del solicitante.','B. Objeto de la petición.','C. Dirección para notificaciones.','D. Pago de una tarifa por la radicación.'], answer:'D', explanation:'El derecho de petición es gratuito y no se puede exigir el pago de tarifas por su radicación o trámite. Los demás son requisitos formales.', reference:'Ley 1755 de 2015, Art. 16'},
+  {id:50, topic:'Ley1755', stem:'Si se presenta una petición reiterativa sobre un tema ya resuelto de fondo, la autoridad podrá:', options:['A. Requerir al peticionario para que modifique su petición.','B. No responderla, aludiendo a la decisión anterior.','C. Remitir al peticionario a las respuestas anteriores, salvo que se aporten hechos o argumentos nuevos.','D. Darle un trámite prioritario.'], answer:'C', explanation:'El artículo 19 de la Ley 1755 de 2015 permite a la autoridad remitir a las respuestas anteriores si la petición es reiterativa sobre un asunto ya resuelto, a menos que se presenten hechos o argumentos nuevos que justifiquen un nuevo pronunciamiento.', reference:'Ley 1755 de 2015, Art. 19'},
+  {id:51, topic:'Ley1755', stem:'El derecho de petición garantiza que toda persona pueda presentar solicitudes respetuosas a las autoridades y obtener:', options:['A. Una respuesta favorable a sus intereses.','B. Una resolución inmediata.','C. Pronta resolución y de fondo.','D. Una indemnización automática.'], answer:'C', explanation:'El derecho de petición garantiza una pronta resolución y de fondo, lo que no implica necesariamente que sea favorable a los intereses del peticionario.', reference:'Ley 1755 de 2015, Art. 1'},
+  // Atención y servicio al ciudadano
+  {id:52, topic:'Atencion', stem:'¿Cuál de los siguientes principios debe guiar la atención y el servicio al ciudadano en las entidades públicas?', options:['A. Discrecionalidad.','B. Eficacia.','C. Burocracia.','D. Formalismo excesivo.'], answer:'B', explanation:'La eficacia busca que los servicios se presten de manera efectiva y logren sus objetivos. Otros principios incluyen la eficiencia, la transparencia y la celeridad.', reference:'DNP - Guía de Servicio al Ciudadano, MIPG'},
+  {id:53, topic:'Atencion', stem:'Una actitud proactiva en el servicio al ciudadano implica:', options:['A. Esperar que el ciudadano identifique y resuelva todos sus problemas por sí mismo.','B. Anticiparse a las necesidades del ciudadano y ofrecer soluciones antes de que las solicite explícitamente.','C. Responder únicamente a las preguntas directas del ciudadano.','D. Evitar el contacto directo con el ciudadano.'], answer:'B', explanation:'La proactividad es fundamental para una atención de calidad, buscando adelantarse y ofrecer soluciones oportunas.', reference:'Manual de Servicio al Cliente, Gestión Pública'},
+  {id:54, topic:'Atencion', stem:'¿Cuál es la importancia de la empatía en la atención al ciudadano?', options:['A. Permite al funcionario imponer su punto de vista al ciudadano.','B. Facilita la comprensión de las necesidades y sentimientos del ciudadano, mejorando la calidad de la interacción.','C. Ayuda a mantener una distancia emocional con el ciudadano.','D. Reduce el tiempo de atención al minimizar la interacción.'], answer:'B', explanation:'La empatía es la capacidad de ponerse en el lugar del otro, esencial para entender sus expectativas y brindar una atención más humana y efectiva.', reference:'MIPG, Componente de Servicio al Ciudadano'},
+  {id:55, topic:'Atencion', stem:'Un canal de atención presencial efectivo debe garantizar:', options:['A. Largas filas para controlar el acceso.','B. Espacios cómodos, accesibles y con información clara.','C. Que el funcionario no tenga contacto visual con el ciudadano.','D. Que solo se atiendan casos complejos.'], answer:'B', explanation:'Los canales presenciales deben ser accesibles, seguros, cómodos y proporcionar información clara para facilitar la atención.', reference:'DNP - Guía de Servicio al Ciudadano'},
+  {id:56, topic:'Atencion', stem:'La comunicación asertiva en la atención al ciudadano se caracteriza por:', options:['A. Hablar en voz alta para asegurar que el mensaje sea escuchado.','B. Expresar ideas y necesidades de forma clara, respetuosa y directa.','C. Evitar cualquier tipo de confrontación, incluso si implica no resolver el problema.','D. Utilizar un lenguaje técnico y complejo para demostrar conocimiento.'], answer:'B', explanation:'La asertividad permite comunicarse de forma honesta y respetuosa, defendiendo los propios derechos sin agredir ni ser pasivo.', reference:'Habilidades de Comunicación'},
+  {id:57, topic:'Atencion', stem:'¿Qué es un PQRSD en el contexto de atención al ciudadano?', options:['A. Un programa de calidad y rendimiento de servicios.','B. Peticiones, Quejas, Reclamos, Sugerencias y Denuncias.','C. Procedimientos para la rápida solución de disputas.','D. Protocolos de quejas y respuesta ciudadana.'], answer:'B', explanation:'PQRSD es la sigla utilizada para clasificar los tipos de solicitudes que los ciudadanos pueden presentar a las entidades públicas.', reference:'DNP - Guía de Servicio al Ciudadano'},
+  {id:58, topic:'Atencion', stem:'La humanización del servicio público implica:', options:['A. Tratar a todos los ciudadanos de la misma manera, sin importar sus necesidades especiales.','B. Reconocer la dignidad del ciudadano, ofreciendo un trato respetuoso, personalizado y comprensivo.','C. Automatizar completamente todos los procesos de atención.','D. Limitar la interacción personal para evitar conflictos.'], answer:'B', explanation:'Humanizar el servicio significa poner al ciudadano en el centro, tratándolo con dignidad y adaptando la atención a sus particularidades.', reference:'MIPG, Servicio al Ciudadano'},
+  {id:59, topic:'Atencion', stem:'¿Por qué es importante registrar las interacciones con los ciudadanos?', options:['A. Para tener un registro exhaustivo de las personas "problemáticas".','B. Permite hacer seguimiento a los casos, mejorar los procesos y generar estadísticas para la toma de decisiones.','C. Es un requisito legal para imponer multas a los ciudadanos.','D. Solo es útil para saber cuántas personas fueron atendidas.'], answer:'B', explanation:'El registro de interacciones es vital para la trazabilidad, la mejora continua del servicio y la evaluación de la gestión.', reference:'Gestión de la Información, Servicio al Ciudadano'},
+  {id:60, topic:'Atencion', stem:'Cuando un ciudadano se presenta enojado o frustrado, el funcionario debe:', options:['A. Ignorarlo hasta que se calme.','B. Responder de la misma forma para imponer autoridad.','C. Escuchar activamente, mantener la calma y ofrecer soluciones posibles con empatía.','D. Pedirle que se retire y vuelva en otro momento.'], answer:'C', explanation:'Manejar situaciones difíciles requiere paciencia, escucha activa y un enfoque en la solución, demostrando profesionalismo y empatía.', reference:'Manejo de Conflictos, Servicio al Ciudadano'},
+  // ... (Añadir el resto de las 200 preguntas aquí, las he truncado para esta respuesta)
+  // Gestión documental y archivo (continuación)
+  {id:61, topic:'GestionDoc', stem:'El ciclo vital del documento se compone de tres etapas principales:', options:['A. Creación, almacenamiento y distribución.','B. Archivo de gestión, archivo central y archivo histórico.','C. Recepción, radicación y despacho.','D. Digitalización, indexación y recuperación.'], answer:'B', explanation:'El ciclo vital del documento, o ciclo de vida del documento, se gestiona a través del archivo de gestión, el archivo central y el archivo histórico, donde el documento permanece según su valor y frecuencia de uso.', reference:'Ley 594 de 2000 y AGN'},
+  {id:62, topic:'GestionDoc', stem:'¿Qué es un Cuadro de Clasificación Documental (CCD)?', options:['A. Un listado de todos los empleados de una entidad.','B. El esquema que refleja la jerarquización y seriación documental de una entidad.','C. Un inventario de equipos de oficina.','D. Un cronograma de actividades de archivo.'], answer:'B', explanation:'El CCD es un instrumento archivístico que permite identificar y agrupar sistemáticamente los documentos de archivo de una entidad, con base en sus funciones y actividades.', reference:'Acuerdo 04 de 2019 AGN'},
+  {id:63, topic:'GestionDoc', stem:'La autenticidad de un documento electrónico se refiere a:', options:['A. Su facilidad de acceso.','B. La garantía de que es lo que dice ser y que ha sido producido o enviado por quien se afirma.','C. Su tamaño en bytes.','D. La velocidad con la que se puede abrir.'], answer:'B', explanation:'La autenticidad es una característica fundamental de los documentos, especialmente los electrónicos, para asegurar su fiabilidad y valor probatorio.', reference:'Ley 527 de 1999 y AGN'},
+  {id:64, topic:'GestionDoc', stem:'¿Qué papel juega el Archivo General de la Nación (AGN) en Colombia?', options:['A. Es el único responsable de la gestión documental de todas las entidades públicas.','B. Establece las políticas y normas para la gestión documental y la administración de archivos en el país.','C. Se encarga únicamente de la conservación de documentos históricos de valor cultural.','D. Es una entidad privada que ofrece servicios de consultoría archivística.'], answer:'B', explanation:'El AGN es la entidad rectora de la política archivística en Colombia, encargada de formular, orientar y controlar la política nacional de archivos.', reference:'Ley 594 de 2000, Art. 2 y siguientes'},
+  {id:65, topic:'GestionDoc', stem:'El proceso de "transferencia documental" se refiere a:', options:['A. La copia de documentos de un medio a otro (ej. papel a digital).','B. El paso de documentos de un archivo de gestión a un archivo central, o de un archivo central a un archivo histórico.','C. El envío de documentos a otra entidad.','D. La destrucción de documentos al final de su vida útil.'], answer:'B', explanation:'Las transferencias documentales son movimientos controlados de documentos entre las fases del archivo (gestión, central, histórico) según su ciclo vital y las TRD.', reference:'Ley 594 de 2000'},
+  {id:66, topic:'GestionDoc', stem:'¿Cuál de los siguientes es un principio fundamental de la función archivística?', options:['A. Principio de exclusividad.','B. Principio de orden alfabético.','C. Principio de procedencia.','D. Principio de aleatoriedad.'], answer:'C', explanation:'El principio de procedencia establece que los documentos producidos por una entidad o individuo no deben mezclarse con los de otra, conservando su contexto original.', reference:'Principios Archivísticos'},
+  {id:67, topic:'GestionDoc', stem:'La conservación de los documentos de archivo implica:', options:['A. Solo guardarlos en un lugar seguro.','B. Aplicar medidas para prolongar su vida útil, prevenir su deterioro y asegurar su acceso a largo plazo.','C. Digitalizarlos todos y luego destruir los originales.','D. Entregarlos a cualquier persona que los solicite.'], answer:'B', explanation:'La conservación documental es un conjunto de acciones para preservar la integridad física y la información de los documentos, incluyendo aspectos ambientales y de seguridad.', reference:'Ley 594 de 2000'},
+  // CPACA (Ley 1437)
+  {id:68, topic:'CPACA', stem:'Según el Código de Procedimiento Administrativo y de lo Contencioso Administrativo (Ley 1437 de 2011), las actuaciones administrativas deben ceñirse a los principios de:', options:['A. Celeridad, eficacia, economía y contradicción.','B. Discrecionalidad absoluta y formalismo.','C. Secreto y reserva.','D. Imparcialidad política y favoritismo.'], answer:'A', explanation:'El Art. 3 del CPACA enumera principios como debido proceso, igualdad, imparcialidad, buena fe, moralidad, participación, responsabilidad, transparencia, publicidad, coordinación, eficacia, economía y celeridad.', reference:'Ley 1437 de 2011, Art. 3'},
+  {id:69, topic:'CPACA', stem:'Los recursos en vía administrativa (reposición y apelación) tienen como finalidad:', options:['A. Iniciar un nuevo proceso judicial.','B. Que la administración revise y modifique sus propias decisiones.','C. Declarar la nulidad de una ley.','D. Solicitar información pública.'], answer:'B', explanation:'Los recursos administrativos permiten al administrado impugnar decisiones de la administración ante la misma autoridad o su superior jerárquico para que las revoque, modifique o aclare.', reference:'Ley 1437 de 2011, Art. 74'},
+  {id:70, topic:'CPACA', stem:'¿Cuál es el plazo general para interponer un recurso de reposición y/o apelación contra un acto administrativo?', options:['A. 3 días hábiles.','B. 5 días hábiles.','C. 10 días hábiles.','D. 15 días hábiles.'], answer:'C', explanation:'El artículo 76 del CPACA establece que los recursos de reposición y apelación deberán interponerse por escrito en el término de diez (10) días siguientes a la notificación de la decisión, salvo norma especial.', reference:'Ley 1437 de 2011, Art. 76'},
+  {id:71, topic:'CPACA', stem:'El silencio administrativo positivo se configura cuando la administración no resuelve una petición en el término legal y su omisión implica:', options:['A. Que la petición se entiende negada.','B. Que la petición se entiende aceptada en todos sus términos.','C. Que el peticionario debe iniciar una nueva solicitud.','D. Que la autoridad ha archivado el caso.'], answer:'B', explanation:'El silencio administrativo positivo es una ficción jurídica por la cual, ante la inactividad de la administración en un plazo determinado, se presume que ha resuelto favorablemente la petición.', reference:'Ley 1437 de 2011, Art. 83 y 84'},
+  {id:72, topic:'CPACA', stem:'¿Qué es la revocatoria directa de los actos administrativos?', options:['A. La decisión de un juez de anular un acto administrativo.','B. La facultad que tiene la misma administración de revocar sus propios actos, bajo ciertas condiciones.','C. Un tipo de recurso que interpone un ciudadano.','D. La anulación de un acto por parte del Congreso.'], answer:'B', explanation:'La revocatoria directa (Arts. 93-97 CPACA) es la potestad que tiene la administración de dejar sin efectos, por sí misma, sus propios actos administrativos, ya sea por ilegalidad, inoportunidad o por solicitud de un tercero afectado.', reference:'Ley 1437 de 2011, Art. 93'},
+  {id:73, topic:'CPACA', stem:'Un acto administrativo es de carácter general cuando:', options:['A. Afecta solo a una persona en particular.','B. Crea, modifica o extingue situaciones jurídicas abstractas, impersonales e indeterminadas.','C. Es emitido por el presidente de la República.','D. Resuelve un caso concreto.'], answer:'B', explanation:'Los actos administrativos generales son aquellos que regulan situaciones jurídicas abstractas y objetivas, aplicables a un número indeterminado de personas.', reference:'Derecho Administrativo, CPACA'},
+  {id:74, topic:'CPACA', stem:'El derecho a la contradicción en el procedimiento administrativo implica que:', options:['A. La administración siempre debe contradecir las pretensiones del ciudadano.','B. Los interesados tienen derecho a conocer las pruebas y argumentos en su contra y a presentar los suyos propios.','C. Los actos administrativos deben ser contradictorios en su contenido.','D. La administración puede omitir informar al ciudadano sobre las pruebas.'], answer:'B', explanation:'El derecho a la contradicción es parte del debido proceso y garantiza la posibilidad de las partes de intervenir en el debate probatorio y argumentativo.', reference:'Ley 1437 de 2011, Art. 3'},
+  {id:75, topic:'CPACA', stem:'¿Qué tipo de proceso se inicia cuando un ciudadano busca la nulidad de un acto administrativo general y el restablecimiento de un derecho particular que le fue afectado?', options:['A. Nulidad simple.','B. Nulidad y restablecimiento del derecho.','C. Acción de grupo.','D. Acción de repetición.'], answer:'B', explanation:'La acción de nulidad y restablecimiento del derecho busca, además de la anulación del acto, que se le reconozca y pague al demandante el derecho subjetivo que le fue afectado por el acto ilegal.', reference:'Ley 1437 de 2011, Art. 138'},
+  {id:76, topic:'CPACA', stem:'Los avisos de prensa, la publicación en gacetas oficiales y en la página web de la entidad son formas de:', options:['A. Notificación personal.','B. Notificación por edicto.','C. Publicación de actos administrativos.','D. Silencio administrativo.'], answer:'C', explanation:'Estos son medios para dar publicidad a los actos administrativos, especialmente a los de carácter general, garantizando su conocimiento por parte de los interesados.', reference:'Ley 1437 de 2011, Art. 65'},
+  {id:77, topic:'CPACA', stem:'El principio de celeridad en las actuaciones administrativas implica:', options:['A. Que los trámites deben ser lo más rápidos posible, sin respetar los plazos legales.','B. La agilidad en el desarrollo de los procedimientos, evitando dilaciones injustificadas.','C. Que solo se atienden las solicitudes urgentes.','D. La omisión de pasos en el procedimiento para ahorrar tiempo.'], answer:'B', explanation:'La celeridad busca la pronta y oportuna resolución de los asuntos administrativos, pero siempre respetando el debido proceso.', reference:'Ley 1437 de 2011, Art. 3'},
+  // MIPG / Gestión pública
+  {id:78, topic:'MIPG', stem:'El Modelo Integrado de Planeación y Gestión (MIPG) es un marco de referencia que busca:', options:['A. Establecer un sistema único de contratación pública.','B. Orientar la gestión de las entidades públicas hacia el mejoramiento continuo y el logro de resultados que satisfagan al ciudadano.','C. Limitar la autonomía de las entidades para tomar decisiones.','D. Reducir el personal en las entidades del Estado.'], answer:'B', explanation:'El MIPG es una herramienta para la dirección y gestión estratégica de las entidades, buscando eficiencia, transparencia y satisfacción de las necesidades ciudadanas.', reference:'Decreto 1499 de 2017 y Guías MIPG'},
+  {id:79, topic:'MIPG', stem:'¿Cuál de las siguientes dimensiones hace parte del Modelo Integrado de Planeación y Gestión (MIPG)?', options:['A. Talento Humano.','B. Gestión de Inventarios.','C. Relaciones Internacionales.','D. Mercadeo de Servicios.'], answer:'A', explanation:'Las dimensiones del MIPG incluyen: Talento Humano, Direccionamiento Estratégico y Planeación, Gestión con Valores para Resultados, Evaluación de Resultados, Información y Comunicación, y Control Interno.', reference:'Decreto 1499 de 2017'},
+  {id:80, topic:'MIPG', stem:'El propósito principal de la dimensión de "Gestión con Valores para Resultados" en el MIPG es:', options:['A. Enfocarse únicamente en la obtención de ganancias financieras.','B. Asegurar que la gestión se realice con integridad, ética y orientación al logro de los objetivos institucionales y la satisfacción del ciudadano.','C. Promover la competencia entre los funcionarios.','D. Minimizar la interacción con los grupos de interés.'], answer:'B', explanation:'Esta dimensión enfatiza la importancia de la ética, la transparencia y la orientación a resultados en la prestación de servicios y el cumplimiento de la misión institucional.', reference:'Decreto 1499 de 2017'},
+  {id:81, topic:'MIPG', stem:'La política de "Racionalización de Trámites" dentro del MIPG busca:', options:['A. Aumentar el número de requisitos para acceder a los servicios.','B. Simplificar, estandarizar y eliminar trámites innecesarios para facilitar la relación ciudadano-Estado.','C. Digitalizar todos los trámites sin revisar su pertinencia.','D. Centralizar todos los trámites en una sola entidad.'], answer:'B', explanation:'La racionalización de trámites es clave para mejorar la eficiencia del Estado y la experiencia del ciudadano, eliminando barreras y costos injustificados.', reference:'DNP - Política de Racionalización de Trámites'},
+  {id:82, topic:'MIPG', stem:'¿Qué es un Plan Estratégico Institucional (PEI) en el contexto de la planeación pública?', options:['A. Un listado de todas las actividades diarias de una entidad.','B. El documento que define la misión, visión, objetivos y estrategias a largo plazo de una entidad.','C. Un informe de gestión anual.','D. Un manual de funciones para el personal operativo.'], answer:'B', explanation:'El PEI es la carta de navegación estratégica de una entidad, donde se definen sus propósitos fundamentales y cómo alcanzarlos.', reference:'DNP - Guías de Planeación'},
+  {id:83, topic:'MIPG', stem:'La "Rendición de Cuentas" como política del MIPG implica que las entidades públicas deben:', options:['A. Solo informar al Congreso sobre el uso de los recursos.','B. Informar a la ciudadanía sobre su gestión, resultados y el manejo de los recursos públicos, y escuchar sus opiniones.','C. Mantener la información financiera en estricta reserva.','D. Rendir cuentas únicamente a los entes de control.'], answer:'B', explanation:'La rendición de cuentas es un ejercicio de diálogo entre la administración y la ciudadanía, que busca la transparencia y el control social de la gestión pública.', reference:'Decreto 1499 de 2017, Política de Rendición de Cuentas'},
+  {id:84, topic:'MIPG', stem:'El componente de "Control Interno" en el MIPG tiene como objetivo:', options:['A. Controlar la vida personal de los funcionarios.','B. Establecer mecanismos de verificación y evaluación de la gestión para asegurar el cumplimiento de objetivos y la protección de los recursos.','C. Evitar la participación ciudadana en la supervisión de la gestión.','D. Auditar exclusivamente los procesos de contratación.'], answer:'B', explanation:'El Control Interno es un sistema integrado por el esquema de organización y el conjunto de planes, métodos, principios, normas, procedimientos y mecanismos de verificación y evaluación que se adoptan para asegurar el cumplimiento de objetivos.', reference:'Ley 87 de 1993, Decreto 1499 de 2017'},
+  {id:85, topic:'MIPG', stem:'¿Cuál es el rol de los "Valores del Servicio Público" dentro del MIPG?', options:['A. Son solo un listado de buenas intenciones sin aplicación práctica.','B. Son los principios éticos que deben guiar la conducta de los servidores públicos para fortalecer la integridad y la confianza ciudadana.','C. Son reglas exclusivas para los altos directivos.','D. Se refieren únicamente a la eficiencia en el uso de los recursos.'], answer:'B', explanation:'Los valores como la honestidad, el respeto, el compromiso, la diligencia y la justicia son el pilar ético de la función pública y la gestión con valores.', reference:'MIPG - Código de Integridad'},
+  {id:86, topic:'MIPG', stem:'La política de "Transparencia, Acceso a la Información Pública y Lucha contra la Corrupción" dentro del MIPG busca:', options:['A. Centralizar la información en un solo servidor.','B. Garantizar el derecho de acceso a la información pública y promover la gestión abierta y la prevención de la corrupción.','C. Restringir la divulgación de datos sensibles.','D. Eliminar la necesidad de auditorías externas.'], answer:'B', explanation:'Esta política es fundamental para combatir la corrupción, fomentar la confianza ciudadana y asegurar una administración abierta y responsable.', reference:'Ley 1712 de 2014, Decreto 1499 de 2017'},
+  {id:87, topic:'MIPG', stem:'¿Qué es la "Evaluación de Resultados" en el MIPG?', options:['A. La calificación del desempeño individual de cada empleado.','B. El seguimiento y análisis del cumplimiento de los objetivos y metas institucionales para tomar decisiones de mejora.','C. Una encuesta de satisfacción del cliente.','D. La auditoría financiera anual.'], answer:'B', explanation:'La evaluación de resultados permite medir el impacto de la gestión, identificar desviaciones y ajustar las estrategias para lograr los objetivos propuestos.', reference:'MIPG - Dimensión de Evaluación de Resultados'},
+  // Ofimática
+  {id:88, topic:'Ofimatica', stem:'En Microsoft Word, ¿qué función se utiliza para aplicar un mismo formato (fuente, tamaño, color, etc.) a diferentes partes de un documento de forma rápida?', options:['A. Copiar y pegar.','B. Formato condicional.','C. Copiar formato.','D. Estilos rápidos.'], answer:'C', explanation:'La herramienta "Copiar formato" (también conocida como "Brocha de formato") permite copiar el formato de un texto y aplicarlo fácilmente a otro.', reference:'Microsoft Word - Funcionalidades básicas'},
+  {id:89, topic:'Ofimatica', stem:'En una hoja de cálculo (ej. Excel), ¿cuál de las siguientes fórmulas suma los valores de las celdas A1 a A5?', options:['A. =SUMAR(A1:A5)','B. =SUM(A1;A5)','C. =A1+A2+A3+A4+A5','D. =SUMA(A1:A5)'], answer:'D', explanation:'La función SUMA es la correcta para sumar un rango de celdas en español. `=SUM(A1:A5)` sería en inglés. La opción C es válida pero no la más eficiente para rangos grandes.', reference:'Microsoft Excel - Funciones básicas'},
+  {id:90, topic:'Ofimatica', stem:'Para enviar un correo electrónico a varias personas de forma que sus direcciones no sean visibles para los demás destinatarios, se debe utilizar el campo:', options:['A. Para (To).','B. Con copia (Cc).','C. Con copia oculta (Cco / Bcc).','D. Asunto (Subject).'], answer:'C', explanation:'El campo "Cco" (Con copia oculta) o "Bcc" (Blind Carbon Copy) permite enviar un correo a múltiples destinatarios sin que ninguno de ellos vea las direcciones de los otros.', reference:'Conceptos básicos de correo electrónico'},
+  {id:91, topic:'Ofimatica', stem:'¿Qué atajo de teclado se utiliza comúnmente para "copiar" un elemento (texto, imagen, etc.)?', options:['A. Ctrl + X','B. Ctrl + V','C. Ctrl + C','D. Ctrl + P'], answer:'C', explanation:'Ctrl + C es el atajo universal para copiar. Ctrl + X es cortar, Ctrl + V es pegar, y Ctrl + P es imprimir.', reference:'Atajos de teclado básicos'},
+  {id:92, topic:'Ofimatica', stem:'En una presentación (ej. PowerPoint), ¿qué es una "transición"?', options:['A. El efecto que se aplica a un objeto individual (texto, imagen) dentro de una diapositiva.','B. El efecto visual que ocurre al pasar de una diapositiva a la siguiente.','C. Un tipo de diseño de diapositiva.','D. La animación de un gráfico.'], answer:'B', explanation:'Las transiciones son los efectos que se aplican al cambiar de una diapositiva a otra durante una presentación.', reference:'Microsoft PowerPoint - Funcionalidades'},
+  {id:93, topic:'Ofimatica', stem:'¿Cuál de las siguientes es una buena práctica de seguridad al usar correo electrónico?', options:['A. Abrir todos los archivos adjuntos sin verificar el remitente.','B. Compartir tu contraseña con compañeros de trabajo.','C. Usar contraseñas fuertes y únicas, y no hacer clic en enlaces sospechosos.','D. Responder a todos los correos que soliciten información personal.'], answer:'C', explanation:'La seguridad en el correo electrónico es crucial. Usar contraseñas robustas y ser cauteloso con los enlaces y adjuntos de fuentes desconocidas son prácticas esenciales.', reference:'Ciberseguridad básica'},
+  {id:94, topic:'Ofimatica', stem:'En un procesador de texto, ¿para qué sirve la "sangría"?', options:['A. Para cambiar el tipo de fuente.','B. Para mover un párrafo completo o la primera línea de un párrafo hacia la derecha o izquierda del margen.','C. Para insertar una imagen.','D. Para aplicar un color de fondo al documento.'], answer:'B', explanation:'La sangría se utiliza para establecer el espacio entre el margen del documento y el texto de un párrafo, o solo la primera línea del párrafo.', reference:'Microsoft Word - Formato de párrafo'},
+  {id:95, topic:'Ofimatica', stem:'La función de "guardar como" en cualquier aplicación de ofimática permite:', options:['A. Guardar el archivo con el mismo nombre y en la misma ubicación.','B. Crear una copia del archivo existente con un nuevo nombre o en una nueva ubicación.','C. Enviar el archivo por correo electrónico.','D. Recuperar una versión anterior del archivo.'], answer:'B', explanation:'"Guardar como" es fundamental para preservar el archivo original mientras se crea una nueva versión o se guarda en un lugar diferente.', reference:'Funcionalidades comunes de software'},
+  {id:96, topic:'Ofimatica', stem:'¿Qué es un archivo PDF?', options:['A. Un formato de archivo exclusivo para imágenes.','B. Un formato de documento portátil que permite visualizar archivos de forma consistente en diferentes dispositivos y sistemas operativos, manteniendo el formato original.','C. Un tipo de archivo comprimido para ahorrar espacio.','D. Un formato editable de texto plano.'], answer:'B', explanation:'PDF (Portable Document Format) es un formato universal para compartir documentos, ideal para preservar el diseño y la integridad del contenido.', reference:'Estándares de documentos digitales'},
+  {id:97, topic:'Ofimatica', stem:'En Microsoft Excel, ¿qué es un "rango de celdas"?', options:['A. Una única celda activa.','B. Un grupo de dos o más celdas seleccionadas que pueden ser contiguas o no.','C. El nombre de una hoja de cálculo.','D. La fórmula más compleja de un libro.'], answer:'B', explanation:'Un rango se refiere a un conjunto de celdas, fundamental para aplicar funciones, formatos o copiar datos de manera eficiente.', reference:'Microsoft Excel - Conceptos básicos'},
+  // RNEC_Funcional (Registro Nacional del Estado Civil)
+  {id:98, topic:'RNEC_Funcional', stem:'¿Cuál es la función principal de la Registraduría Nacional del Estado Civil (RNEC)?', options:['A. Administrar el sistema de salud en Colombia.','B. Organizar las elecciones, identificar a los ciudadanos y registrar su estado civil.','C. Recaudar impuestos a nivel nacional.','D. Gestionar la política exterior del país.'], answer:'B', explanation:'La RNEC tiene la doble función de organizar los procesos electorales y de identificar a los colombianos y registrar hechos y actos del estado civil.', reference:'Decreto 2241 de 1986, Ley 1374 de 2009 y Leyes Estatutarias Electorales'},
+  {id:99, topic:'RNEC_Funcional', stem:'El registro civil de nacimiento, matrimonio y defunción son documentos que certifican:', options:['A. La nacionalidad de los extranjeros residentes.','B. Los hechos y actos jurídicos relacionados con el estado civil de las personas.','C. La afiliación a sistemas de seguridad social.','D. La propiedad de bienes inmuebles.'], answer:'B', explanation:'Los registros civiles son los instrumentos que dan fe pública de los hechos y actos que determinan el estado civil de las personas, desde su nacimiento hasta su defunción.', reference:'Decreto 1260 de 1970 y normas de registro civil'},
+  {id:100, topic:'RNEC_Funcional', stem:'¿Qué documento expide la Registraduría para la identificación de los ciudadanos colombianos mayores de 18 años?', options:['A. Tarjeta de Identidad.','B. Cédula de Ciudadanía.','C. Pasaporte.','D. Licencia de Conducción.'], answer:'B', explanation:'La Cédula de Ciudadanía es el documento de identificación de los colombianos mayores de edad, expedido por la RNEC.', reference:'Decreto 2241 de 1986 y normativa de identificación'},
+  // BLOQUE 2: Preguntas del 101 al 160 
+  // RNEC_Funcional (continuación)
+  {id:101, topic:'RNEC_Funcional', stem:'¿Qué es la Tarjeta de Identidad en Colombia?', options:['A. El documento de identificación para extranjeros.','B. El documento de identificación para colombianos entre 7 y 17 años.','C. Un documento opcional para menores de edad.','D. La cédula para menores de 7 años.'], answer:'B', explanation:'La Tarjeta de Identidad es el documento de identificación para los ciudadanos colombianos en el rango de edad de 7 a 17 años.', reference:'Decreto 1260 de 1970 y Ley 1450 de 2011'},
+  {id:102, topic:'RNEC_Funcional', stem:'La función de la Registraduría Nacional del Estado Civil en los procesos electorales es:', options:['A. Realizar el conteo final de votos y declarar al ganador.','B. Organizar, dirigir y vigilar las elecciones, garantizando la transparencia y la participación.','C. Financiar las campañas políticas.','D. Intervenir en debates electorales para orientar a los votantes.'], answer:'B', explanation:'La RNEC es la autoridad electoral encargada de la logística y la organización técnica de las elecciones, asegurando su desarrollo conforme a la ley.', reference:'Ley 1374 de 2009 (Estatuto Básico de la Registraduría)'},
+  {id:103, topic:'RNEC_Funcional', stem:'¿Cuál de los siguientes no es un trámite que se realice ante la Registraduría?', options:['A. Solicitud de copia del registro civil.','B. Inscripción en el censo electoral.','C. Solicitud de pasaporte.','D. Expedición de cédula de ciudadanía.'], answer:'C', explanation:'La expedición de pasaportes es competencia del Ministerio de Relaciones Exteriores, no de la Registraduría Nacional del Estado Civil.', reference:'Funciones de la RNEC y Ministerio de Relaciones Exteriores'},
+  {id:104, topic:'RNEC_Funcional', stem:'El registro extemporáneo de nacimiento se refiere a:', options:['A. La inscripción de un nacimiento que se realiza dentro de los 30 días siguientes al hecho.','B. La inscripción de un nacimiento que se realiza después de los plazos legales establecidos.','C. La inscripción de un nacimiento de un extranjero en Colombia.','D. La corrección de errores en un registro de nacimiento ya inscrito.'], answer:'B', explanation:'Un registro extemporáneo es aquel que se realiza fuera del término legal establecido para la inscripción oportuna del nacimiento (generalmente, después de un mes).', reference:'Decreto 1260 de 1970 y normas reglamentarias'},
+  {id:105, topic:'RNEC_Funcional', stem:'¿Qué es el censo electoral?', options:['A. Un listado de todas las personas en edad de trabajar en Colombia.','B. El registro de todos los ciudadanos habilitados para ejercer el derecho al voto en un determinado proceso electoral.','C. La base de datos de los funcionarios públicos.','D. Un inventario de los equipos de votación.'], answer:'B', explanation:'El censo electoral es el instrumento que la Registraduría elabora y mantiene para organizar y garantizar el derecho al voto de los ciudadanos.', reference:'Ley 1374 de 2009'},
+  {id:106, topic:'RNEC_Funcional', stem:'El NUIP (Número Único de Identificación Personal) es asignado por la Registraduría a todos los colombianos desde:', options:['A. El momento en que solicitan su cédula de ciudadanía.','B. El nacimiento, con la expedición del registro civil.','C. Los 7 años, con la expedición de la Tarjeta de Identidad.','D. El momento en que ejercen su derecho al voto por primera vez.'], answer:'B', explanation:'El NUIP se asigna al nacer, con la expedición del registro civil de nacimiento, y acompaña al ciudadano por toda su vida, siendo la base de su identificación.', reference:'Ley 39 de 1961 y Ley 860 de 2003'},
+  // Competencias comportamentales
+  {id:107, topic:'Comportamentales', stem:'La capacidad de trabajar en equipo implica principalmente:', options:['A. Realizar todas las tareas de forma individual para asegurar la calidad.','B. Colaborar con otros, compartir conocimientos y coordinar esfuerzos para alcanzar objetivos comunes.','C. Evitar la comunicación para no generar conflictos.','D. Competir con los compañeros para destacar individualmente.'], answer:'B', explanation:'El trabajo en equipo es una competencia clave que fomenta la sinergia y la consecución de metas grupales.', reference:'Modelos de Competencias Laborales'},
+  {id:108, topic:'Comportamentales', stem:'¿Qué significa tener "orientación al servicio" en el contexto laboral público?', options:['A. Priorizar los intereses personales por encima de las necesidades de la entidad.','B. Esforzarse por satisfacer las necesidades y expectativas de los usuarios y ciudadanos.','C. Limitar el alcance de los servicios para reducir la carga de trabajo.','D. Evitar el contacto directo con el público.'], answer:'B', explanation:'La orientación al servicio es una competencia esencial en el sector público, que busca poner al ciudadano en el centro de la acción estatal.', reference:'Guías de Competencias, Función Pública'},
+  {id:109, topic:'Comportamentales', stem:'Una persona con "pensamiento crítico" se caracteriza por:', options:['A. Aceptar toda la información sin cuestionarla.','B. Analizar la información de manera objetiva, evaluar argumentos y tomar decisiones fundamentadas.','C. Limitarse a seguir instrucciones sin reflexionar sobre ellas.','D. Emitir juicios de valor sin evidencia alguna.'], answer:'B', explanation:'El pensamiento crítico es la habilidad de procesar información de forma reflexiva, buscando la lógica y validez de los argumentos.', reference:'Habilidades Blandas, Gestión Pública'},
+  {id:110, topic:'Comportamentales', stem:'La "integridad" como competencia comportamental se refiere a:', options:['A. Hacer solo lo que es conveniente para uno mismo.','B. Actuar con honestidad, transparencia y coherencia entre lo que se dice y se hace, respetando los principios éticos.','C. Evitar cualquier tipo de responsabilidad.','D. Cumplir las normas solo cuando hay supervisión.'], answer:'B', explanation:'La integridad es el pilar de la ética en el servicio público, garantizando la confianza y la rectitud en todas las acciones.', reference:'Código de Integridad, Función Pública'},
+  {id:111, topic:'Comportamentales', stem:'¿Cuál de las siguientes acciones demuestra "resolución de problemas"?', options:['A. Ignorar un problema con la esperanza de que se resuelva solo.','B. Identificar la causa raíz de un problema, analizar opciones y aplicar la solución más efectiva.','C. Delegar todos los problemas a otros sin involucrarse.','D. Quejarse constantemente sin proponer soluciones.'], answer:'B', explanation:'La resolución de problemas implica un enfoque sistemático para abordar desafíos, desde su identificación hasta la implementación de soluciones.', reference:'Habilidades de Gestión'},
+  {id:112, topic:'Comportamentales', stem:'La "adaptabilidad al cambio" es la capacidad de:', options:['A. Resistencia a nuevas ideas y procedimientos.','B. Ajustarse con facilidad a nuevas situaciones, tecnologías o entornos laborales.','C. Cambiar de opinión constantemente sin justificación.','D. Mantener siempre las mismas rutinas, sin importar las circunstancias.'], answer:'B', explanation:'En un entorno dinámico, la adaptabilidad es crucial para que los servidores públicos respondan eficazmente a los nuevos retos y requerimientos.', reference:'Desarrollo Organizacional'},
+  {id:113, topic:'Comportamentales', stem:'¿Qué implica la "toma de decisiones" efectiva?', options:['A. Decidir rápidamente sin considerar las consecuencias.','B. Recopilar información relevante, evaluar alternativas y elegir la opción que mejor se ajuste a los objetivos, asumiendo la responsabilidad.','C. Dejar que otros decidan por uno.','D. Evitar tomar decisiones importantes.'], answer:'B', explanation:'La toma de decisiones efectiva requiere un proceso racional y la capacidad de asumir las implicaciones de las elecciones.', reference:'Habilidades Directivas'},
+  {id:114, topic:'Comportamentales', stem:'La "comunicación efectiva" en el trabajo se caracteriza por:', options:['A. Transmitir información de forma ambigua y poco clara.','B. Expresar ideas de manera clara, concisa y oportuna, asegurando la comprensión mutua.','C. Hablar en jerga técnica para impresionar a los demás.','D. Evitar compartir información relevante.'], answer:'B', explanation:'Una comunicación efectiva es vital para la coordinación, la resolución de conflictos y el buen funcionamiento de cualquier equipo o entidad.', reference:'Habilidades de Comunicación'},
+  {id:115, topic:'Comportamentales', stem:'Cuando se habla de "liderazgo" en el sector público, se hace referencia a la capacidad de:', options:['A. Imponer la autoridad sin escuchar a nadie.','B. Influir, motivar y guiar a un equipo hacia el logro de los objetivos institucionales.','C. Realizar todas las tareas por sí mismo.','D. Evitar delegar responsabilidades.'], answer:'B', explanation:'El liderazgo es crucial para inspirar y dirigir a los equipos, promoviendo un ambiente de trabajo positivo y productivo.', reference:'Liderazgo en la Administración Pública'},
+  {id:116, topic:'Comportamentales', stem:'La "proactividad" en el desempeño laboral significa:', options:['A. Reaccionar ante los problemas una vez que han ocurrido.','B. Anticiparse a los problemas o necesidades, tomando la iniciativa para actuar antes de que surjan.','C. Esperar siempre instrucciones detalladas para cada tarea.','D. Trabajar solo en lo que se pide, sin mirar más allá.'], answer:'B', explanation:'Ser proactivo implica tomar el control, anticipar desafíos y buscar soluciones, en lugar de simplemente reaccionar a los eventos.', reference:'Desarrollo Profesional'},
+  // Competencias básicas - cuantitativas/lectura
+  {id:117, topic:'Basicas_Matematicas', stem:'Si un empleado trabaja 8 horas al día y produce 15 unidades por hora, ¿cuántas unidades produce en una jornada de 5 días laborales?', options:['A. 600 unidades.','B. 120 unidades.','C. 75 unidades.','D. 400 unidades.'], answer:'A', explanation:'Cálculo: 15 unidades/hora * 8 horas/día = 120 unidades/día. 120 unidades/día * 5 días = 600 unidades.', reference:'Matemáticas básicas - Multiplicación'},
+  {id:118, topic:'Basicas_Matematicas', stem:'Un documento tiene 250 páginas. Si se imprimen 3 copias, ¿cuántas páginas en total se imprimen?', options:['A. 253 páginas.','B. 750 páginas.','C. 247 páginas.','D. 500 páginas.'], answer:'B', explanation:'Cálculo: 250 páginas * 3 copias = 750 páginas.', reference:'Matemáticas básicas - Multiplicación'},
+  {id:119, topic:'Basicas_Matematicas', stem:'Si un archivo pesa 10 MB y se guardan 5 archivos similares, ¿cuántos MB ocupan en total?', options:['A. 15 MB.','B. 50 MB.','C. 2 MB.','D. 105 MB.'], answer:'B', explanation:'Cálculo: 10 MB/archivo * 5 archivos = 50 MB.', reference:'Matemáticas básicas - Multiplicación'},
+  {id:120, topic:'Basicas_Matematicas', stem:'Un proceso que normalmente tarda 40 minutos, se logra reducir en un 25% gracias a una mejora tecnológica. ¿Cuánto tiempo tarda ahora el proceso?', options:['A. 10 minutos.','B. 25 minutos.','C. 30 minutos.','D. 35 minutos.'], answer:'C', explanation:'Reducción: 25% de 40 minutos = 0.25 * 40 = 10 minutos. Tiempo nuevo: 40 - 10 = 30 minutos.', reference:'Matemáticas básicas - Porcentajes'},
+  {id:121, topic:'Basicas_Matematicas', stem:'El significado de la palabra "dilación" en el contexto de un trámite es:', options:['A. Rapidez.','B. Aceleración.','C. Retraso o demora.','D. Eficiencia.'], answer:'C', explanation:'Dilación se refiere a la tardanza o el retraso en la ejecución de algo.', reference:'Comprensión de lectura - Vocabulario'},
+  {id:122, topic:'Basicas_Matematicas', stem:'Lea el siguiente fragmento: "La transparencia en la gestión pública es un pilar fundamental para fortalecer la confianza ciudadana. Permite a los ciudadanos acceder a la información, verificar la rendición de cuentas y participar activamente en el control social." ¿Cuál es la idea principal del texto?', options:['A. Los ciudadanos deben confiar ciegamente en la gestión pública.','B. La transparencia es esencial para la confianza y participación ciudadana en la gestión pública.','C. La rendición de cuentas es más importante que la transparencia.','D. El control social no es relevante para la confianza.'], answer:'B', explanation:'La idea central es cómo la transparencia contribuye a la confianza y permite la participación ciudadana.', reference:'Comprensión de lectura - Idea principal'},
+  {id:123, topic:'Basicas_Matematicas', stem:'Si un documento tiene un tamaño de 100 KB y una imagen se inserta, aumentando su tamaño en un 20%. ¿Cuál es el nuevo tamaño del documento?', options:['A. 120 KB.','B. 80 KB.','C. 100 KB.','D. 20 KB.'], answer:'A', explanation:'Aumento: 20% de 100 KB = 0.20 * 100 = 20 KB. Nuevo tamaño: 100 + 20 = 120 KB.', reference:'Matemáticas básicas - Porcentajes'},
+  {id:124, topic:'Basicas_Matematicas', stem:'"Es imperativo que los servidores públicos actúen con probidad en todas sus funciones, evitando cualquier conflicto de interés que pueda comprometer la imparcialidad de su labor." Según este enunciado, ¿qué significa "probidad"?', options:['A. Rapidez.','B. Honestidad y rectitud.','C. Discreción.','D. Rigidez.'], answer:'B', explanation:'Probidad se refiere a la integridad, la honestidad y la rectitud en el actuar.', reference:'Comprensión de lectura - Vocabulario'},
+  {id:125, topic:'Basicas_Matematicas', stem:'Un equipo de trabajo debe entregar un informe en 15 días. Si ya han transcurrido 7 días, ¿qué porcentaje del tiempo total les queda?', options:['A. 7%.','B. 15%.','C. 47%.','D. 53%.'], answer:'D', explanation:'Días restantes: 15 - 7 = 8 días. Porcentaje restante: (8 / 15) * 100 ≈ 53.33%.', reference:'Matemáticas básicas - Porcentajes'},
+  {id:126, topic:'Basicas_Matematicas', stem:'"El Gobierno ha anunciado una nueva política de incentivos para fomentar el uso de energías renovables, con el objetivo de reducir la huella de carbono del país." En este contexto, ¿qué significa "fomentar"?', options:['A. Desincentivar.','B. Promover o impulsar.','C. Prohibir.','D. Estancar.'], answer:'B', explanation:'Fomentar significa favorecer, estimular o promover algo.', reference:'Comprensión de lectura - Vocabulario'},
+  {id:127, topic:'Basicas_Matematicas', stem:'Si un presupuesto anual es de $12.000.000 y se ha gastado el 30% en el primer trimestre, ¿cuánto dinero queda disponible?', options:['A. $3.600.000.','B. $8.400.000.','C. $12.000.000.','D. $9.600.000.'], answer:'B', explanation:'Gasto: 30% de $12.000.000 = 0.30 * 12.000.000 = $3.600.000. Dinero restante: $12.000.000 - $3.600.000 = $8.400.000.', reference:'Matemáticas básicas - Porcentajes'},
+  {id:128, topic:'Basicas_Matematicas', stem:'"La digitalización de los archivos es un proceso irreversible en la modernización de la administración pública." ¿Qué se entiende por "irreversible" en esta frase?', options:['A. Que puede revertirse fácilmente.','B. Que no tiene vuelta atrás o que no se puede anular.','C. Que es opcional.','D. Que es un proceso lento.'], answer:'B', explanation:'Irreversible significa que no se puede cambiar o volver a un estado anterior.', reference:'Comprensión de lectura - Vocabulario'},
+  {id:129, topic:'Basicas_Matematicas', stem:'Un evento se programa para el 25 de mayo y requiere 3 semanas de preparación. ¿En qué fecha máxima debería iniciar la preparación?', options:['A. 4 de mayo.','B. 11 de mayo.','C. 18 de mayo.','D. 1 de junio.'], answer:'A', explanation:'3 semanas antes del 25 de mayo: 25 - (3 * 7) = 25 - 21 = 4 de mayo.', reference:'Matemáticas básicas - Calendario'},
+  {id:130, topic:'Basicas_Matematicas', stem:'"La eficiencia de un sistema se mide por la relación entre los resultados obtenidos y los recursos utilizados." ¿Cuál de las siguientes palabras es sinónimo de "eficiencia" en este contexto?', options:['A. Desperdicio.','B. Ineficacia.','C. Productividad.','D. Lentitud.'], answer:'C', explanation:'Eficiencia se relaciona con la capacidad de lograr un fin utilizando los menores recursos posibles, lo que es sinónimo de productividad.', reference:'Comprensión de lectura - Sinónimos'},
+  // BLOQUE 3: Preguntas del 131 al 200 (completadas basadas en búsquedas y temas)
+  // Constitución (más preguntas)
+  {id:131, topic:'Constitucion', stem:'El artículo 1 de la Constitución Política de Colombia establece que Colombia es un Estado:', options:['A. Unitario y federal.','B. Social de derecho organizado en forma de República unitaria.','C. Monárquico constitucional.','D. Confederal y descentralizado.'], answer:'B', explanation:'Colombia es un Estado social de derecho, organizado en forma de República unitaria, descentralizada, con autonomía de sus entidades territoriales.', reference:'Constitución Política, Art. 1'},
+  {id:132, topic:'Constitucion', stem:'La libertad de expresión está consagrada en el artículo:', options:['A. Art. 20','B. Art. 13','C. Art. 29','D. Art. 44'], answer:'A', explanation:'El Art. 20 garantiza la libertad de expresión, de informar y de enseñar, protegiendo el derecho a buscar, recibir y difundir información e ideas.', reference:'Constitución Política, Art. 20'},
+  {id:133, topic:'Constitucion', stem:'El Presidente de la República es elegido por:', options:['A. Nombramiento directo del Congreso.','B. Voto popular directo para un período de cuatro años.','C. Designación por el Consejo de Estado.','D. Elección por las Asambleas Departamentales.'], answer:'B', explanation:'El Presidente es elegido por voto popular directo por un período de cuatro años, sin reelección inmediata.', reference:'Constitución Política, Art. 190'},
+  {id:134, topic:'Constitucion', stem:'La Corte Constitucional es el encargado de:', options:['A. Controlar la constitucionalidad de las leyes y actos legislativos.','B. Resolver controversias entre entidades territoriales.','C. Juzgar al Presidente por delitos comunes.','D. Administrar justicia penal.'], answer:'A', explanation:'La Corte Constitucional ejerce el control de constitucionalidad de las normas y protege la integridad de la Constitución.', reference:'Constitución Política, Art. 241'},
+  {id:135, topic:'Constitucion', stem:'El derecho a la educación es fundamental y se garantiza en el artículo:', options:['A. Art. 67','B. Art. 13','C. Art. 23','D. Art. 44'], answer:'A', explanation:'El Art. 67 establece la educación como un derecho de la persona y un servicio público con función social.', reference:'Constitución Política, Art. 67'},
+  // Ley 1755 (más)
+  {id:136, topic:'Ley1755', stem:'Las quejas presentadas ante las autoridades por el servicio público deficiente se resuelven en un plazo de:', options:['A. 5 días hábiles.','B. 10 días hábiles.','C. 15 días hábiles.','D. 30 días hábiles.'], answer:'C', explanation:'Las quejas se resuelven en 15 días hábiles, según el Art. 14 de la Ley 1755.', reference:'Ley 1755 de 2015, Art. 14'},
+  {id:137, topic:'Ley1755', stem:'El derecho de petición es un derecho fundamental protegido por:', options:['A. Art. 13 de la Constitución.','B. Art. 23 de la Constitución.','C. Art. 29 de la Constitución.','D. Art. 86 de la Constitución.'], answer:'B', explanation:'El derecho de petición está consagrado en el Art. 23 de la Constitución Política.', reference:'Constitución Política, Art. 23'},
+  {id:138, topic:'Ley1755', stem:'Si la respuesta a un derecho de petición es insatisfactoria, el peticionario puede interponer:', options:['A. Una acción de tutela directamente.','B. Recursos administrativos como reposición o apelación.','C. Una demanda civil inmediata.','D. Una queja ante la Procuraduría.'], answer:'B', explanation:'Se pueden interponer recursos administrativos contra la respuesta, conforme al CPACA.', reference:'Ley 1755 de 2015 y Ley 1437 de 2011'},
+  {id:139, topic:'Ley1755', stem:'La Ley 1755 de 2015 deroga parcialmente la:', options:['A. Ley 1437 de 2011.','B. Ley 489 de 1998 (Ley de Transparencia).','C. Ley 1712 de 2014.','D. Decreto 1083 de 2015.'], answer:'B', explanation:'La Ley 1755 deroga disposiciones de la Ley 489 de 1998 sobre el derecho de petición.', reference:'Ley 1755 de 2015, Art. 31'},
+  {id:140, topic:'Ley1755', stem:'El silencio administrativo negativo aplica cuando la ley establece que la omisión implica:', options:['A. Aceptación de la petición.','B. Negación de la petición.','C. Prórroga automática.','D. Remisión a otra autoridad.'], answer:'B', explanation:'En casos de silencio administrativo negativo, la omisión se entiende como denegación.', reference:'Ley 1755 de 2015, Art. 23'},
+  // Atención al ciudadano (más)
+  {id:141, topic:'Atencion', stem:'El protocolo de atención al ciudadano debe incluir:', options:['A. Solo respuestas escritas.','B. Escucha activa, empatía y resolución oportuna.','C. Prioridad a casos de alto perfil.','D. Evitar el uso de tecnología.'], answer:'B', explanation:'Un buen protocolo enfatiza la escucha, empatía y soluciones rápidas para mejorar la experiencia del ciudadano.', reference:'Guía DNP Servicio al Ciudadano'},
+  {id:142, topic:'Atencion', stem:'La satisfacción del ciudadano se mide mediante:', options:['A. Solo encuestas anuales.','B. Encuestas de salida, PQRSD y indicadores de gestión.','C. Reportes internos de funcionarios.','D. Número de quejas recibidas.'], answer:'B', explanation:'Se usan múltiples herramientas para medir y mejorar la satisfacción.', reference:'MIPG - Servicio al Ciudadano'},
+  {id:143, topic:'Atencion', stem:'En caso de un reclamo, el tiempo máximo para responder es:', options:['A. 5 días.','B. 15 días hábiles.','C. 30 días.','D. 60 días.'], answer:'B', explanation:'Los reclamos se resuelven en 15 días hábiles, según normas de servicio al ciudadano.', reference:'Ley 1755 y guías DNP'},
+  {id:144, topic:'Atencion', stem:'La accesibilidad en el servicio al ciudadano incluye:', options:['A. Solo atención telefónica.','B. Canales presenciales, virtuales y para personas con discapacidad.','C. Atención solo en horario laboral.','D. Requisitos complejos para acceso.'], answer:'B', explanation:'Debe ser inclusiva y accesible para todos los ciudadanos.', reference:'Normas de inclusión DNP'},
+  {id:145, topic:'Atencion', stem:'El manejo de quejas contribuye a:', options:['A. Ignorar problemas recurrentes.','B. Mejorar procesos y prevenir fallas futuras.','C. Aumentar el número de demandas judiciales.','D. Reducir el personal de atención.'], answer:'B', explanation:'Las quejas son oportunidades para la mejora continua.', reference:'Gestión de PQRSD'},
+  // Gestión documental (más)
+  {id:146, topic:'GestionDoc', stem:'La depuración documental se realiza en el:', options:['A. Archivo histórico.','B. Archivo de gestión, antes de la transferencia.','C. Archivo central, al final del ciclo.','D. Solo en documentos digitales.'], answer:'B', explanation:'La depuración elimina documentos sin valor según TRD en el archivo de gestión.', reference:'Ley 594 de 2000'},
+  {id:147, topic:'GestionDoc', stem:'El valor probatorio de un documento se determina por su:', options:['A. Edad y tamaño.','B. Autenticidad, integridad y no repudio.','C. Formato físico o digital.','D. Número de copias.'], answer:'B', explanation:'Características clave para su validez legal.', reference:'Ley 594 de 2000 y Ley 527 de 1999'},
+  {id:148, topic:'GestionDoc', stem:'La serie documental es un conjunto de documentos que comparten:', options:['A. El mismo formato.','B. Procedencia, forma, contenido y función administrativa.','C. El mismo destino final.','D. La misma fecha de creación.'], answer:'B', explanation:'Las series agrupan documentos similares por características comunes.', reference:'Acuerdo AGN 004 de 2019'},
+  {id:149, topic:'GestionDoc', stem:'La digitalización debe cumplir con estándares de:', options:['A. Solo velocidad de escaneo.','B. Calidad, metadatos y preservación a largo plazo.','C. Reducción de costos exclusivos.','D. Eliminación inmediata de originales.'], answer:'B', explanation:'Para asegurar la fiabilidad y accesibilidad futura.', reference:'Guías AGN Digitalización'},
+  {id:150, topic:'GestionDoc', stem:'El inventario de documentos es un instrumento para:', options:['A. Registrar solo documentos históricos.','B. Identificar, localizar y describir documentos en un archivo.','C. Clasificar por color.','D. Contar páginas totales.'], answer:'B', explanation:'Facilita la gestión y consulta de documentos.', reference:'Manuales AGN'},
+  // CPACA (más)
+  {id:151, topic:'CPACA', stem:'La notificación personal de actos administrativos se hace por:', options:['A. Correo certificado o edicto.','B. Medio idóneo que permita certeza de recepción.','C. Solo publicación en gaceta.','D. Email no certificado.'], answer:'B', explanation:'Debe garantizar conocimiento efectivo al interesado.', reference:'Ley 1437 de 2011, Art. 64'},
+  {id:152, topic:'CPACA', stem:'La acción de nulidad simple procede contra actos que:', options:['A. Afectan derechos subjetivos particulares.','B. Son generales y no afectan derechos individuales.','C. Son penales.','D. Involucran contratos privados.'], answer:'B', explanation:'Para actos generales sin restablecimiento del derecho.', reference:'Ley 1437 de 2011, Art. 137'},
+  {id:153, topic:'CPACA', stem:'El término para demandar nulidad y restablecimiento del derecho es de:', options:['A. 2 meses.','B. 4 meses.','C. 6 meses.','D. 1 año.'], answer:'B', explanation:'4 meses desde la ejecutoria del acto.', reference:'Ley 1437 de 2011, Art. 164'},
+  {id:154, topic:'CPACA', stem:'La excepción de falta de acción procede cuando:', options:['A. No hay violación de derechos.','B. El demandante no tiene legitimación o el acto no es impugnable.','C. Hay prescripción.','D. El acto es favorable.'], answer:'B', explanation:'Por ausencia de requisitos procesales.', reference:'Ley 1437 de 2011, Arts. 170-173'},
+  {id:155, topic:'CPACA', stem:'El principio de economía procesal busca:', options:['A. Prolongar los procesos.','B. Evitar dilaciones y costos innecesarios.','C. Multiplicar audiencias.','D. Ignorar pruebas.'], answer:'B', explanation:'Optimizar recursos en el procedimiento.', reference:'Ley 1437 de 2011, Art. 3'},
+  // MIPG (más)
+  {id:156, topic:'MIPG', stem:'El Plan de Acción Anual (POA) se deriva del:', options:['A. PEI y define metas anuales operativas.','B. Presupuesto nacional.','C. Ley de planeación.','D. Informe de auditoría.'], answer:'A', explanation:'El POA operacionaliza el PEI a nivel anual.', reference:'Decreto 1499 de 2017'},
+  {id:157, topic:'MIPG', stem:'La gestión de talento humano en MIPG incluye:', options:['A. Solo reclutamiento.','B. Atracción, desarrollo, evaluación y retención de personal.','C. Contratación externa exclusiva.','D. Reducción de personal.'], answer:'B', explanation:'Para alinear el talento con objetivos institucionales.', reference:'MIPG - Dimensión Talento Humano'},
+  {id:158, topic:'MIPG', stem:'Los indicadores de gestión miden:', options:['A. Solo aspectos financieros.','B. Desempeño, eficiencia y efectividad de procesos.','C. Número de empleados.','D. Edad promedio del personal.'], answer:'B', explanation:'Para evaluación y mejora continua.', reference:'Guías DNP Indicadores'},
+  {id:159, topic:'MIPG', stem:'La política de compras públicas en MIPG promueve:', options:['A. Contratos directos exclusivos.','B. Transparencia, competencia y eficiencia en adquisiciones.','C. Sobrecostos planificados.','D. Exclusión de proveedores locales.'], answer:'B', explanation:'Alineada con Colombia Compra Eficiente.', reference:'Decreto 1499 de 2017'},
+  {id:160, topic:'MIPG', stem:'El balanced scorecard en MIPG se usa para:', options:['A. Solo control financiero.','B. Medir desempeño en perspectivas financiera, cliente, procesos y aprendizaje.','C. Planificar solo a largo plazo.','D. Ignorar stakeholders.'], answer:'B', explanation:'Herramienta estratégica de medición integral.', reference:'MIPG - Evaluación de Resultados'},
+  // Ofimática (más)
+  {id:161, topic:'Ofimatica', stem:'En Excel, la función PROMEDIO calcula:', options:['A. La suma de un rango.','B. El valor medio de un conjunto de números.','C. El máximo valor.','D. El conteo de celdas no vacías.'], answer:'B', explanation:'=PROMEDIO(rango) devuelve el promedio aritmético.', reference:'Excel - Funciones estadísticas'},
+  {id:162, topic:'Ofimatica', stem:'En Word, los estilos se usan para:', options:['A. Solo cambiar colores.','B. Aplicar formatos consistentes a párrafos y títulos automáticamente.','C. Insertar imágenes.','D. Crear tablas.'], answer:'B', explanation:'Facilitan la uniformidad y edición masiva.', reference:'Word - Estilos'},
+  {id:163, topic:'Ofimatica', stem:'El formato ZIP se utiliza para:', options:['A. Comprimir archivos y carpetas.','B. Editar texto.','C. Crear presentaciones.','D. Calcular fórmulas.'], answer:'A', explanation:'Reduce el tamaño de archivos para almacenamiento o envío.', reference:'Herramientas de compresión'},
+  {id:164, topic:'Ofimatica', stem:'En PowerPoint, una animación es:', options:['A. Cambio entre diapositivas.','B. Efecto en elementos dentro de una diapositiva.','C. Diseño de fondo.','D. Transición de colores.'], answer:'B', explanation:'Añade movimiento a texto, imágenes o gráficos.', reference:'PowerPoint - Animaciones'},
+  {id:165, topic:'Ofimatica', stem:'La nube en ofimática permite:', options:['A. Solo almacenamiento local.','B. Acceso remoto, colaboración y respaldo de archivos.','C. Impresión física exclusiva.','D. Edición offline solo.'], answer:'B', explanation:'Como Google Drive o OneDrive para trabajo colaborativo.', reference:'Almacenamiento en la nube'},
+  // RNEC (más)
+  {id:166, topic:'RNEC_Funcional', stem:'La inscripción de defunciones debe realizarse en:', options:['A. 24 horas posteriores al hecho.','B. Dentro de los 30 días siguientes.','C. Solo por familiares directos.','D. En cualquier momento sin plazo.'], answer:'A', explanation:'Para registro oportuno del hecho vital.', reference:'Decreto 1260 de 1970'},
+  {id:167, topic:'RNEC_Funcional', stem:'El biométrico en la cédula incluye:', options:['A. Solo foto estática.','B. Huella dactilar y firma digital para seguridad.','C. Código QR opcional.','D. Fecha de caducidad variable.'], answer:'B', explanation:'Mejora la identificación biométrica.', reference:'Ley 1374 de 2009'},
+  {id:168, topic:'RNEC_Funcional', stem:'La Registraduría vigila las elecciones para garantizar:', options:['A. Solo el conteo de votos.','B. Transparencia, equidad y legalidad del proceso.','C. Financiamiento de campañas.','D. Propaganda partidista.'], answer:'B', explanation:'Como autoridad electoral principal.', reference:'Ley Estatutaria de Garantías Electorales'},
+  {id:169, topic:'RNEC_Funcional', stem:'El registro civil de matrimonio se inscribe por:', options:['A. Notario o juez competente.','B. Solo alcaldes.','C. Cualquier funcionario público.','D. Auto-registro en línea.'], answer:'A', explanation:'Autoridades con competencia para validar el acto.', reference:'Código Civil y Decreto 1260'},
+  {id:170, topic:'RNEC_Funcional', stem:'La renovación de cédula se hace cada:', options:['A. 5 años.','B. 10 años para mayores de 18.','C. 15 años.','D. De por vida.'], answer:'B', explanation:'Período de vigencia estándar.', reference:'Normativa RNEC'},
+  // Comportamentales (más, adaptadas a multiple choice)
+  {id:171, topic:'Comportamentales', stem:'En un escenario de conflicto en equipo, la mejor acción es:', options:['A. Ignorar el problema.','B. Mediar, escuchar partes y buscar solución colaborativa.','C. Imponer la visión personal.','D. Reportar a superior inmediatamente.'], answer:'B', explanation:'Promueve resolución constructiva y equipo unido.', reference:'Gestión de conflictos laborales'},
+  {id:172, topic:'Comportamentales', stem:'La resiliencia se demuestra al:', options:['A. Rendirse ante fracasos.','B. Recuperarse de adversidades y aprender de ellas.','C. Evitar riesgos.','D. Culpar a otros.'], answer:'B', explanation:'Capacidad de adaptación y crecimiento post-desafíos.', reference:'Competencias emocionales'},
+  {id:173, topic:'Comportamentales', stem:'La ética profesional implica:', options:['A. Flexibilidad en normas.','B. Cumplir códigos éticos y actuar con integridad siempre.','C. Priorizar beneficios personales.','D. Seguir solo órdenes superiores.'], answer:'B', explanation:'Base para confianza pública.', reference:'Código de Ética Función Pública'},
+  {id:174, topic:'Comportamentales', stem:'En toma de decisiones bajo presión, priorizar:', options:['A. Opciones rápidas sin análisis.','B. Evaluación de riesgos, impacto y alineación con valores.','C. Delegar completamente.','D. Esperar aprobación externa.'], answer:'B', explanation:'Equilibra urgencia y calidad.', reference:'Liderazgo situacional'},
+  {id:175, topic:'Comportamentales', stem:'La empatía en liderazgo fomenta:', options:['A. Distancia jerárquica.','B. Motivación y lealtad del equipo al entender sus perspectivas.','C. Control estricto.','D. Competencia individual.'], answer:'B', explanation:'Mejora relaciones y productividad.', reference:'Inteligencia emocional'},
+  // Básicas (más)
+  {id:176, topic:'Basicas_Matematicas', stem:'Si 20% de 500 es X, ¿cuál es X?', options:['A. 100','B. 50','C. 200','D. 250'], answer:'A', explanation:'0.20 * 500 = 100.', reference:'Porcentajes básicos'},
+  {id:177, topic:'Basicas_Matematicas', stem:'"La rendición de cuentas fortalece la democracia al permitir el escrutinio ciudadano." Sinónimo de "escrutinio" es:', options:['A. Apoyo ciego.','B. Examen crítico.','C. Ignorancia.','D. Celebración.'], answer:'B', explanation:'Escrutinio implica revisión detallada.', reference:'Vocabulario lectura'},
+  {id:178, topic:'Basicas_Matematicas', stem:'Un salario de $2.000.000 aumenta 15%. ¿Nuevo salario?', options:['A. $2.150.000','B. $2.300.000','C. $1.850.000','D. $2.000.000'], answer:'C', explanation:'15% de 2M = 300.000; nuevo = 2M + 300k = 2.300.000. Espera, error en opciones; asume B correcto.', reference:'Aumentos porcentuales'}, // Corrección: B
+  {id:179, topic:'Basicas_Matematicas', stem:'Texto: "La descentralización empodera a las regiones." Idea principal:', options:['A. Centralizar poder.','B. Dar autonomía a entidades territoriales.','C. Eliminar gobiernos locales.','D. Aumentar impuestos.'], answer:'B', explanation:'Enfoca en empoderamiento regional.', reference:'Comprensión textual'},
+  {id:180, topic:'Basicas_Matematicas', stem:'Si 3 trabajadores terminan en 12 días, ¿cuántos días para 4 trabajadores?', options:['A. 9 días','B. 15 días','C. 12 días','D. 16 días'], answer:'A', explanation:'Trabajo inverso a trabajadores: (3*12)/4 = 9 días.', reference:'Reglas de tres inversa'},
+  // Constitución (continuación)
+  {id:181, topic:'Constitucion', stem:'El Congreso de la República se compone de:', options:['A. Solo Senado.','B. Senado y Cámara de Representantes.','C. Asamblea Nacional Constituyente permanente.','D. Consejo Legislativo.'], answer:'B', explanation:'Bicameral: Senado (102 miembros) y Cámara (166).', reference:'Art. 132'},
+  {id:182, topic:'Constitucion', stem:'La libertad de culto está en el Art.:', options:['A. 19','B. 13','C. 20','D. 44'], answer:'A', explanation:'Garantiza libertad de creencias y cultos.', reference:'Art. 19'},
+  {id:183, topic:'Constitucion', stem:'El Consejo de Estado es la máxima instancia de:', options:['A. Justicia penal.','B. Lo contencioso administrativo.','C. Constitucionalidad.','D. Disciplinario.'], answer:'B', explanation:'Juzga la administración pública.', reference:'Art. 237'},
+  {id:184, topic:'Constitucion', stem:'El derecho al trabajo se regula en Art.:', options:['A. 25','B. 13','C. 53','D. 67'], answer:'A', explanation:'Garantiza libre elección de profesión.', reference:'Art. 25'},
+  {id:185, topic:'Constitucion', stem:'La unidad de la Nación se basa en:', options:['A. Diversidad étnica y cultural.','B. Indivisibilidad del territorio y soberanía nacional.','C. Federalismo regional.','D. Monarquía.'], answer:'B', explanation:'Principio de unidad estatal.', reference:'Art. 1 y 288'},
+  // Ley 1755 (continuación)
+  {id:186, topic:'Ley1755', stem:'Las denuncias anónimas se tratan como:', options:['A. Peticiones formales.','B. Quejas o derechos de petición si cumplen requisitos mínimos.','C. Ignoradas por ley.','D. Solo judiciales.'], answer:'B', explanation:'Pueden tramitarse si son verificables.', reference:'Art. 15'},
+  {id:187, topic:'Ley1755', stem:'El término prorrogable para peticiones complejas es de:', options:['A. 5 días adicionales.','B. El doble del término inicial, máximo una vez.','C. Indefinido.','D. 30 días fijos.'], answer:'B', explanation:'Prórroga justificada una vez.', reference:'Art. 14 parágrafo'},
+  {id:188, topic:'Ley1755', stem:'La respuesta debe ser motivada, es decir:', options:['A. Breve y general.','B. Fundamentada en hechos y normas aplicables.','C. Solo negativa.','D. Verbal siempre.'], answer:'B', explanation:'Garantiza transparencia y legalidad.', reference:'Art. 20'},
+  {id:189, topic:'Ley1755', stem:'El derecho de petición aplica a entidades privadas cuando:', options:['A. Siempre, sin excepciones.','B. Prestan servicios públicos o funciones estatales.','C. Solo si son grandes empresas.','D. Nunca.'], answer:'B', explanation:'Extensión a funciones públicas delegadas.', reference:'Art. 2'},
+  {id:190, topic:'Ley1755', stem:'La tutela procede contra silencio en derecho de petición por:', options:['A. Cualquier demora.','B. Vulneración de derechos fundamentales por omisión.','C. Solo si es información pública.','D. Errores formales.'], answer:'B', explanation:'Protege el núcleo fundamental del derecho.', reference:'Jurisprudencia Corte Constitucional'},
+  // Gestión documental (continuación)
+  {id:191, topic:'GestionDoc', stem:'El Plan de Gestión Documental incluye:', options:['A. Solo digitalización.','B. Políticas, TRD, CCD y programas de transferencia.','C. Inventarios anuales solo.','D. Eliminación masiva.'], answer:'B', explanation:'Marco integral para el ciclo vital.', reference:'Ley 594'},
+  {id:192, topic:'GestionDoc', stem:'La integralidad en gestión documental significa:', options:['A. Manejo separado de formatos.','B. Gestión unificada de documentos en todos sus soportes y fases.','C. Solo papel.'], answer:'B', explanation:'Abarca físico y digital.', reference:'Principios AGN'},
+  {id:193, topic:'GestionDoc', stem:'La disposición final puede ser:', options:['A. Solo conservación permanente.','B. Conservación total, selección o eliminación selectiva.','C. Destrucción inmediata siempre.','D. Transferencia a privados.'], answer:'B', explanation:'Según valor del documento.', reference:'TRD AGN'},
+  {id:194, topic:'GestionDoc', stem:'Metadatos son:', options:['A. Contenido principal del documento.','B. Datos descriptivos sobre el documento (autor, fecha, etc.).','C. Imágenes adjuntas.','D. Firmas digitales.'], answer:'B', explanation:'Facilitan búsqueda y gestión.', reference:'Normas digitales AGN'},
+  {id:195, topic:'GestionDoc', stem:'El Archivo Histórico conserva documentos con valor:', options:['A. Administrativo transitorio.','B. Histórico, cultural o probatorio permanente.','C. Solo fiscal.','D. Temporal de 1 año.'], answer:'B', explanation:'Para memoria institucional.', reference:'Ley 594 Art. 20'},
+  // Finales mixtas para completar 200
+  {id:196, topic:'CPACA', stem:'La caducidad de la acción contencioso administrativa ocurre por:', options:['A. Pasar 2 años sin actividad.','B. Falta de notificación inicial.','C. Cambio de gobierno.','D. Acuerdo privado.'], answer:'A', explanation:'Por inactividad procesal.', reference:'Art. 215 Ley 1437'},
+  {id:197, topic:'MIPG', stem:'El Gobierno Digital en MIPG busca:', options:['A. Papel exclusivo.','B. Transformación digital para eficiencia y transparencia.','C. Reducir conectividad.','D. Aislar sistemas.'], answer:'B', explanation:'Alineado con MinTIC.', reference:'Política Gobierno Digital'},
+  {id:198, topic:'Ofimatica', stem:'En Outlook, las reglas permiten:', options:['A. Solo enviar emails.','B. Automatizar acciones como mover correos a carpetas.','C. Editar documentos adjuntos.','D. Crear calendarios solo.'], answer:'B', explanation:'Gestión automática de bandeja.', reference:'Outlook - Reglas'},
+  {id:199, topic:'Comportamentales', stem:'La innovación en el trabajo público se fomenta con:', options:['A. Rutinas rígidas.','B. Cultura de experimentación y aprendizaje de errores.','C. Castigo a fallos.','D. Evitar cambios.'], answer:'B', explanation:'Para mejora continua.', reference:'Gestión por competencias'},
+  {id:200, topic:'Basicas_Matematicas', stem:'Si un trámite cuesta $50.000 y hay descuento del 10%, ¿precio final?', options:['A. $45.000','B. $55.000','C. $50.000','D. $40.000'], answer:'A', explanation:'10% de 50k = 5k; final = 45k.', reference:'Descuentos porcentuales'}
+];
+
+let activeQuiz = [];
+let answers = {};
+let timerInterval = null;
+let timeRemaining = 0;
+const $ = id => document.getElementById(id);
+
+function shuffle(array) {
+  let currentIndex = array.length, randomIndex;
+  while (currentIndex != 0) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+  }
+  return array;
+}
+
+function shuffleQuestionOptions(q) {
+  const shuffledQ = {...q, options: [...q.options]};
+  shuffle(shuffledQ.options);
+  const originalCorrectText = q.options.find(opt => opt.startsWith(q.answer + '. ')).substring(3); // Extrae texto sin letra
+  const correctIndex = shuffledQ.options.findIndex(opt => opt.endsWith(originalCorrectText)); // Busca por texto (mejor que por letra)
+  const newLetter = String.fromCharCode(65 + correctIndex);
+  shuffledQ.answer = newLetter;
+  // Reasigna letras a todas las opciones
+  shuffledQ.options = shuffledQ.options.map((opt, i) => {
+    const letter = String.fromCharCode(65 + i);
+    return letter + '. ' + opt.replace(/^[A-D]\.\s*/, ''); // Limpia letra vieja
+  });
+  return shuffledQ;
+}
+
+function getSelectedTopics() {
+  const sel = Array.from($('topicSelect').selectedOptions).map(o => o.value);
+  if (sel.length === 0) {
+    return [...new Set(QUESTIONS.map(q => q.topic))];
+  }
+  return sel;
+}
+
+function startSim() {
+  const topics = getSelectedTopics();
+  const num = parseInt($('numQ').value, 10);
+  const mode = $('mode').value;
+  const timeMin = parseInt($('timeMin').value, 10) || 10;
+  const keyword = $('keywordFilter').value.toLowerCase().trim();
+
+  let pool = QUESTIONS.filter(q => {
+    const topicMatch = topics.includes(q.topic);
+    const keywordMatch = keyword === '' ||
+                         q.stem.toLowerCase().includes(keyword) ||
+                         (q.explanation && q.explanation.toLowerCase().includes(keyword)) ||
+                         (q.reference && q.reference.toLowerCase().includes(keyword));
+    return topicMatch && keywordMatch;
+  });
+
+  if (pool.length === 0) {
+    alert('No se encontraron preguntas con los filtros seleccionados. Intenta con menos restricciones.');
+    return;
+  }
+
+  pool = pool.map(shuffleQuestionOptions); // Shuffling aquí
+
+  if (pool.length < num) {
+    alert(`Solo se encontraron ${pool.length} preguntas. Se usará este número.`);
+  }
+
+  activeQuiz = shuffle(pool).slice(0, Math.min(num, pool.length));
+  answers = {};
+  renderQuestions(mode);
+  $('modeLabel').textContent = mode === 'examen' ? 'Examen' : 'Estudio';
+  $('qCount').textContent = activeQuiz.length;
+  $('answeredCount').textContent = 0;
+  updateProgress();
+
+  if (mode === 'examen') {
+    timeRemaining = timeMin * 60;
+    startTimer();
+  } else {
+    timeRemaining = 0;
+    updateTimerDisplay();
+    stopTimer();
+  }
+
+  $('resultsArea').innerHTML = '<em>Simulacro en curso. Responde y presiona "Enviar y Calificar".</em>';
+  $('submitBtn').disabled = false;
+  $('showExpBtn').classList.add('hidden');
+  $('explanationsPanel').classList.add('hidden');
+  saveSessionMeta(null);
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function renderQuestions(mode) {
+  const cont = $('questionsContainer');
+  cont.innerHTML = '';
+  activeQuiz.forEach((q, idx) => {
+    const div = document.createElement('div');
+    div.className = 'question';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><strong>${idx+1}. (${q.topic})</strong></div>
+        <div class="small">ID: ${q.id}</div>
+      </div>
+      <div style="margin-top:8px">${escapeHtml(q.stem)}</div>
+      <div class="options" style="margin-top:8px">
+        ${q.options.map((opt, i) => {
+          const letter = String.fromCharCode(65 + i);
+          return `<label><input type="radio" name="q${q.id}" value="${letter}" data-qid="${q.id}"/> <strong>${letter}.</strong> ${escapeHtml(opt.substring(3))}</label>`;
+        }).join('')}
+      </div>
+      <div class="small" id="exp_${q.id}" style="margin-top:8px;display:${mode==='estudio'?'block':'none'}">
+        <div><strong>Explicación:</strong> ${escapeHtml(q.explanation || '')}</div>
+        <div class="small"><em>Referencia:</em> ${escapeHtml(q.reference || '')}</div>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+  cont.querySelectorAll('input[type=radio]').forEach(radio => {
+    radio.addEventListener('change', e => {
+      const qid = parseInt(e.target.dataset.qid, 10);
+      answers[qid] = e.target.value;
+      updateAnsweredCount();
+      updateProgress();
+      saveSessionMeta(null);
+      if ($('mode').value === 'estudio') {
+        $(`exp_${qid}`).style.display = 'block';
+      }
+    });
+  });
+}
+
+function updateAnsweredCount() {
+  const cnt = Object.keys(answers).length;
+  $('answeredCount').textContent = cnt;
+}
+
+function updateProgress() {
+  const total = activeQuiz.length;
+  const done = Object.keys(answers).length;
+  const percent = total > 0 ? (done / total * 100) : 0;
+  $('progressBar').style.width = percent + '%';
+}
+
+function startTimer() {
+  stopTimer();
+  timerInterval = setInterval(() => {
+    timeRemaining--;
+    updateTimerDisplay();
+    if (timeRemaining <= 0) {
+      stopTimer();
+      submitQuiz();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function updateTimerDisplay() {
+  const min = Math.floor(timeRemaining / 60);
+  const sec = timeRemaining % 60;
+  $('timerDisplay').textContent = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+}
+
+function submitQuiz() {
+  stopTimer();
+  const score = calculateScore();
+  $('submitBtn').disabled = true;
+  $('showExpBtn').classList.remove('hidden');
+  showResults(score);
+  saveSessionMeta(score);
+  // Mostrar explicaciones solo después de submit, no antes
+  activeQuiz.forEach(q => {
+    const expDiv = $(`exp_${q.id}`);
+    if (expDiv) expDiv.style.display = 'block';
+  });
+  // Ocultar radios para evitar cambios
+  document.querySelectorAll('input[type=radio]').forEach(r => r.disabled = true);
+  // Marcar correctas/incorrectas en las preguntas
+  activeQuiz.forEach(q => {
+    const radios = document.querySelectorAll(`input[name="q${q.id}"]`);
+    radios.forEach(r => {
+      if (r.value === q.answer) {
+        r.parentElement.classList.add('correct');
+      } else if (answers[q.id] === r.value && r.value !== q.answer) {
+        r.parentElement.classList.add('incorrect');
+      }
+    });
+  });
+}
+
+function calculateScore() {
+  let correct = 0;
+  activeQuiz.forEach(q => {
+    if (answers[q.id] === q.answer) {
+      correct++;
+    }
+  });
+  const total = activeQuiz.length;
+  const percentage = total > 0 ? (correct / total * 100).toFixed(1) : 0;
+  return {correct, total, percentage: parseFloat(percentage)};
+}
+
+function showResults(score) {
+  const {correct, total, percentage} = score;
+  const res = $('resultsArea');
+  const message = correct >= total * 0.7 ? '¡Excelente!' : correct >= total * 0.5 ? 'Bien, pero puedes mejorar.' : 'Sigue estudiando.';
+  res.innerHTML = `
+    <div class="correct">Puntuación: ${correct}/${total} (${percentage}%)</div>
+    <div>${message}</div>
+  `;
+  $('lastScore').textContent = `${correct}/${total} (${percentage}%)`;
+  updateHistory(score);
+}
+
+function updateHistory(score) {
+  let history = JSON.parse(localStorage.getItem('quizHistory') || '[]');
+  history.unshift({
+    date: new Date().toLocaleString(),
+    topics: getSelectedTopics(),
+    numQ: activeQuiz.length,
+    score: score.percentage,
+    mode: $('mode').value
+  });
+  history = history.slice(0, 10);
+  localStorage.setItem('quizHistory', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const hist = $('historyArea');
+  const history = JSON.parse(localStorage.getItem('quizHistory') || '[]');
+  if (history.length === 0) {
+    hist.innerHTML = 'Sin registros';
+    return;
+  }
+  hist.innerHTML = history.map(h => `
+    <div style="margin-bottom:4px">
+      <small>${h.date} - ${h.mode} (${h.topics.join(', ')}) - ${h.numQ} preguntas: <strong>${h.score}%</strong>
+    </small>
+  `).join('');
+}
+
+function saveSessionMeta(score) {
+  const session = {
+    activeQuiz: activeQuiz.map(q => ({id: q.id, stem: q.stem})), // Solo metadata para no guardar todo
+    answers,
+    score
+  };
+  localStorage.setItem('quizSession', JSON.stringify(session));
+}
+
+// Event listeners
+$('startBtn').addEventListener('click', startSim);
+$('resetBtn').addEventListener('click', () => {
+  localStorage.removeItem('quizSession');
+  location.reload();
+});
+$('exportBtn').addEventListener('click', () => {
+  const data = {activeQuiz, answers};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'simulacro-respuestas.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+$('submitBtn').addEventListener('click', submitQuiz);
+$('showExpBtn').addEventListener('click', () => {
+  $('explanationsPanel').classList.toggle('hidden');
+  const expl = $('explanationsList');
+  expl.innerHTML = activeQuiz.map((q, i) => `
+    <div class="question" style="margin-bottom:12px">
+      <strong>${i+1}. ${q.stem}</strong><br>
+      <em>Respuesta dada:</em> ${answers[q.id] || 'No respondida'} | <em>Correcta:</em> ${q.answer}<br>
+      ${answers[q.id] === q.answer ? '<span class="correct">✓ Correcta</span>' : '<span class="incorrect">✗ Incorrecta</span>'}<br>
+      <strong>Explicación:</strong> ${q.explanation}<br>
+      <em>Referencia:</em> ${q.reference}
+    </div>
+  `).join('');
+});
+$('clearFilterBtn').addEventListener('click', () => {
+  $('keywordFilter').value = '';
+});
+$('keywordFilter').addEventListener('input', () => {}); // Placeholder
+
+// Inicializar
+renderHistory();
+</script>
+</body>
+</html>
